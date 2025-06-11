@@ -12,7 +12,7 @@ A powerful, multi-threaded web data extraction tool with proxy support, advanced
 
 - **Multi-threaded crawling** with configurable depth
 - **Unlimited proxy support** with automatic rotation and failover
-- **Built-in proxy checker** for testing and validating proxy lists
+- **Built-in proxy fetcher** for testing and validating proxy lists
 - **Advanced content discovery** (APIs, files)
 - **Multiple output formats** (JSON, CSV)
 - **Selenium support** for JavaScript-heavy sites
@@ -28,7 +28,7 @@ For Selenium support (optional):
 - Install Chrome/Chromium browser
 - Download ChromeDriver from https://chromedriver.chromium.org/
 
-## Proxy Checker
+## Proxy Fetcher
 
 Test and validate proxy lists from multiple sources:
 
@@ -36,7 +36,7 @@ Test and validate proxy lists from multiple sources:
 python proxy_get.py
 ```
 
-The proxy checker will:
+The proxy fetcher will:
 - Download proxy lists from 3 built-in sources
 - Test all proxies concurrently with 3-second timeout
 - Show real-time progress: `<ipaddress> - Success <responsetime>s`
@@ -47,12 +47,12 @@ The proxy checker will:
 
 Basic usage:
 ```bash
-python webscraper.py https://example.com
+python siphon.py https://example.com
 ```
 
 With tested proxies:
 ```bash
-python webscraper.py https://example.com --proxies proxies.txt
+python siphon.py https://example.com --proxies proxies.txt
 ```
 
 ## Command Line Options
@@ -89,32 +89,32 @@ python webscraper.py https://example.com --proxies proxies.txt
 ### Test Proxies First
 ```bash
 python proxy_get.py
-python webscraper.py https://example.com --proxies proxies.txt
+python siphon.py https://example.com --proxies proxies.txt
 ```
 
 ### Basic Web Scraping
 ```bash
-python webscraper.py https://example.com --depth 2
+python siphon.py https://example.com --depth 2
 ```
 
 ### Download Specific File Types
 ```bash
-python webscraper.py https://example.com --filetype pdf doc xlsx
+python siphon.py https://example.com --filetype pdf doc xlsx
 ```
 
 ### Find APIs and Keys
 ```bash
-python webscraper.py https://example.com --find-apis --depth 3
+python siphon.py https://example.com --find-apis --depth 3
 ```
 
 ### Crawl-Only Mode (Discovery)
 ```bash
-python webscraper.py https://example.com --crawl-only --dump-all
+python siphon.py https://example.com --crawl-only --dump-all
 ```
 
 ### JavaScript-Heavy Sites
 ```bash
-python webscraper.py https://example.com --selenium --threads 1
+python siphon.py https://example.com --selenium --threads 1
 ```
 
 ## Output Structure

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Part of the Siphon - Web Data Extraction Tool
 import requests
 import concurrent.futures
 import time

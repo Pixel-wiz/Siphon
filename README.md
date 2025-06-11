@@ -1,6 +1,12 @@
-# WebScraper - Professional Web Scraping Tool
+# Siphon - Web Data Extraction Tool
 
-A powerful, multi-threaded web scraper with proxy support, advanced content discovery, and robust encoding handling.
+     ╔═╗╦╔═╗╦ ╦╔═╗╔╗╔
+     ╚═╗║╠═╝╠═╣║ ║║║║  Web Data Extraction Tool
+     ╚═╝╩╩  ╩ ╩╚═╝╝╚╝  
+     
+     ░░░▒▒▒▓▓▓███████████▶ DRAINING THE WEB ▶███████████▓▓▓▒▒▒░░░
+
+A powerful, multi-threaded web data extraction tool with proxy support, advanced content discovery, and robust encoding handling.
 
 ## Features
 

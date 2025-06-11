@@ -31,8 +31,6 @@ def print_logo():
      ╚═╝╩╩  ╩ ╩╚═╝╝╚╝  
      
      ░░░▒▒▒▓▓▓███████████▶ DRAINING THE WEB ▶███████████▓▓▓▒▒▒░░░
-
-     Siphon - Web Data Extraction Tool
      """
     print(logo)
 

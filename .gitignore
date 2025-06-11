@@ -5,4 +5,7 @@ proxies.txt
 temp_extract/
 
 # Ignore output folder
-output/ 
+output/
+
+# Ignore Review-Gate extension directory
+Review-Gate/ 

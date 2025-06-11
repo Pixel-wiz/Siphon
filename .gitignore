@@ -1,0 +1,8 @@
+# Ignore proxy list
+proxies.txt
+
+# Ignore temporary extraction folder
+temp_extract/
+
+# Ignore output folder
+output/ 

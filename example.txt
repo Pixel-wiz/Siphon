@@ -1,0 +1,908 @@
+
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <script>
+        if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark')
+        }
+    </script>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <title>Next.js Cursor Rules for AI</title>
+<meta name="description" content="This rule explains Next.js conventions and best practices for fullstack development.">
+
+    <link rel="canonical" href="https://playbooks.com/rules/nextjs">
+
+<meta property="og:title" content="Next.js Cursor Rules for AI">
+<meta property="og:description" content="This rule explains Next.js conventions and best practices for fullstack development.">
+<meta property="og:image" content="https://assets.playbooks.com/og-images/50aa3f94ad.png">
+<meta property="og:url" content="https://playbooks.com/rules/nextjs">
+<meta property="og:type" content="website">
+<meta name="twitter:title" content="Next.js Cursor Rules for AI">
+<meta name="twitter:description" content="This rule explains Next.js conventions and best practices for fullstack development.">
+<meta name="twitter:image" content="https://assets.playbooks.com/og-images/50aa3f94ad.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@iannuttall">
+<link rel="icon" href="https://playbooks.com/img/favicon.png" media="(prefers-color-scheme: light)">
+<link rel="icon" href="https://playbooks.com/img/favicon-light.png" media="(prefers-color-scheme: dark)">
+    <link rel="preload" as="style" href="https://playbooks.com/build/assets/app-BcNkss1C.css" /><link rel="modulepreload" href="https://playbooks.com/build/assets/app-NbEw79IF.js" /><link rel="stylesheet" href="https://playbooks.com/build/assets/app-BcNkss1C.css" data-navigate-track="reload" /><script type="module" src="https://playbooks.com/build/assets/app-NbEw79IF.js" data-navigate-track="reload"></script>    <!-- Livewire Styles --><style >[wire\:loading][wire\:loading], [wire\:loading\.delay][wire\:loading\.delay], [wire\:loading\.inline-block][wire\:loading\.inline-block], [wire\:loading\.inline][wire\:loading\.inline], [wire\:loading\.block][wire\:loading\.block], [wire\:loading\.flex][wire\:loading\.flex], [wire\:loading\.table][wire\:loading\.table], [wire\:loading\.grid][wire\:loading\.grid], [wire\:loading\.inline-flex][wire\:loading\.inline-flex] {display: none;}[wire\:loading\.delay\.none][wire\:loading\.delay\.none], [wire\:loading\.delay\.shortest][wire\:loading\.delay\.shortest], [wire\:loading\.delay\.shorter][wire\:loading\.delay\.shorter], [wire\:loading\.delay\.short][wire\:loading\.delay\.short], [wire\:loading\.delay\.default][wire\:loading\.delay\.default], [wire\:loading\.delay\.long][wire\:loading\.delay\.long], [wire\:loading\.delay\.longer][wire\:loading\.delay\.longer], [wire\:loading\.delay\.longest][wire\:loading\.delay\.longest] {display: none;}[wire\:offline][wire\:offline] {display: none;}[wire\:dirty]:not(textarea):not(input):not(select) {display: none;}:root {--livewire-progress-bar-color: #2299dd;}[x-cloak] {display: none !important;}[wire\:cloak] {display: none !important;}</style>
+    <script src="/livewire/livewire.min.js?id=df3a17f2"   data-csrf="SzNYKXLdrAUu82Yq7nGGHkwGqSlhRR4fqsAl5xuT" data-update-uri="/livewire/update" data-navigate-once="true"></script>
+    <style>
+    :root.dark {
+        color-scheme: dark;
+    }
+</style>
+<script>
+    window.Flux = {
+        applyAppearance (appearance) {
+            let applyDark = () => document.documentElement.classList.add('dark')
+            let applyLight = () => document.documentElement.classList.remove('dark')
+
+            if (appearance === 'system') {
+                let media = window.matchMedia('(prefers-color-scheme: dark)')
+
+                window.localStorage.removeItem('flux.appearance')
+
+                media.matches ? applyDark() : applyLight()
+            } else if (appearance === 'dark') {
+                window.localStorage.setItem('flux.appearance', 'dark')
+
+                applyDark()
+            } else if (appearance === 'light') {
+                window.localStorage.setItem('flux.appearance', 'light')
+
+                applyLight()
+            }
+        }
+    }
+
+    window.Flux.applyAppearance(window.localStorage.getItem('flux.appearance') || 'system')
+</script>
+    <meta name="csrf-token" content="SzNYKXLdrAUu82Yq7nGGHkwGqSlhRR4fqsAl5xuT">
+        <script async data-id="101480643" src="//static.getclicky.com/js"></script>
+        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    <!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=AW-1066109984">
+</script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'AW-1066109984');
+</script></head>
+
+<body class="bg-white dark:bg-zinc-900">
+        <div class="min-h-screen flex flex-col gap-3 mx-auto w-full px-5 max-w-7xl">
+                    <div wire:snapshot="{&quot;data&quot;:[],&quot;memo&quot;:{&quot;id&quot;:&quot;WHcvyTPp7okOdw1y2jGj&quot;,&quot;name&quot;:&quot;navigation&quot;,&quot;path&quot;:&quot;rules\/nextjs&quot;,&quot;method&quot;:&quot;GET&quot;,&quot;children&quot;:[],&quot;scripts&quot;:[],&quot;assets&quot;:[],&quot;errors&quot;:[],&quot;locale&quot;:&quot;en&quot;},&quot;checksum&quot;:&quot;db984292983d78aee2e72c0e9fcf20538e94280d1826764955d07615239b5534&quot;}" wire:effects="[]" wire:id="WHcvyTPp7okOdw1y2jGj"
+    x-data="{
+        scrolled: false,
+        init() {
+            // Disabled for now - uncomment to re-enable scroll behavior
+            // window.addEventListener('scroll', () => {
+            //     this.scrolled = window.scrollY > 0;
+            // });
+        }
+    }"
+    class="w-full transition-all"
+    :class="{ 'bg-background': scrolled }"
+>
+    <div class="relative w-full px-3 mx-auto transition-all lg:px-4 xl:px-0"
+        :class="{ 'border-b border-border': scrolled }"
+    >
+        <div class="flex items-center justify-between h-14">
+            <!-- Logo Section -->
+            <div class="grow basis-0">
+                <a wire:navigate class="flex items-center gap-1 text-lg font-mono leading-tight" href="https://playbooks.com">
+                    <!--[if BLOCK]><![endif]--><!--[if ENDBLOCK]><![endif]-->
+<svg
+    viewBox="0 0 97 88"
+    version="1.1"
+    xmlns="http://www.w3.org/2000/svg"
+    xmlns:xlink="http://www.w3.org/1999/xlink"
+    class="w-6 h-6"
+>
+    <g id="Page-1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g fill="var(--color-accent-content)">
+            <polygon id="Path" points="63.4552 9.80431 44.7379 0 0.813984 43.3382 0 44.1301 39.2172 65.3601 54.6665 49.3167 34.7582 39.2822"></polygon>
+            <polygon id="Path" points="33.1633 77.3113 51.8806 87.1156 95.8313 43.751 96.6218 42.982 57.5255 22.1081 42.0761 38.1515 61.7673 47.929"></polygon>
+        </g>
+    </g>
+</svg>
+<!--[if BLOCK]><![endif]--><!--[if ENDBLOCK]><![endif]-->
+                    <div>playbooks</div>
+                </a>
+            </div>
+
+            <!-- Desktop Navigation -->
+            <div class="hidden lg:flex lg:items-center">
+                <div class="hidden space-x-2 lg:flex lg:items-center">
+                    <nav class="flex items-center gap-1 py-3" data-flux-navbar>
+    <a href="https://playbooks.com/learn" class="px-3 h-8 flex items-center rounded-lg relative px-2.5! text-zinc-500 dark:text-white/80  data-current:after:absolute data-current:after:-bottom-3 data-current:after:inset-x-0 data-current:after:h-[2px] [--hover-fill:color-mix(in_oklab,_var(--color-accent-content),_transparent_90%)] hover:text-zinc-800 dark:hover:text-white data-current:text-(--color-accent-content) hover:data-current:text-(--color-accent-content) hover:bg-zinc-800/5 dark:hover:bg-white/10 hover:data-current:bg-(--hover-fill) data-current:after:bg-(--color-accent-content)" data-flux-navbar-items="data-flux-navbar-items" wire:navigate="">
+        <div class=" flex-1 text-sm font-medium leading-none whitespace-nowrap [[data-nav-footer]_&]:hidden [[data-nav-sidebar]_[data-nav-footer]_&]:block" data-content>Learn</div>
+    </a>
+                        <ui-dropdown position="bottom start"  data-flux-dropdown>
+    <button type="button" class="px-3 h-8 flex items-center rounded-lg relative px-2.5! text-zinc-500 dark:text-white/80  data-current:after:absolute data-current:after:-bottom-3 data-current:after:inset-x-0 data-current:after:h-[2px] [--hover-fill:color-mix(in_oklab,_var(--color-accent-content),_transparent_90%)] hover:text-zinc-800 dark:hover:text-white data-current:text-(--color-accent-content) hover:data-current:text-(--color-accent-content) hover:bg-zinc-800/5 dark:hover:bg-white/10 hover:data-current:bg-(--hover-fill) data-current:after:bg-(--color-accent-content) cursor-pointer" data-flux-navbar-items="data-flux-navbar-items">
+        <div class=" flex-1 text-sm font-medium leading-none whitespace-nowrap [[data-nav-footer]_&]:hidden [[data-nav-sidebar]_[data-nav-footer]_&]:block" data-content>Rules</div>
+    
+            <svg class="shrink-0 [:where(&amp;)]:size-4 size-4 ms-1" data-flux-icon xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" data-slot="icon">
+  <path fill-rule="evenodd" d="M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/>
+</svg>
+    </button>
+                            <ui-menu
+    class="[:where(&amp;)]:min-w-48 p-[.3125rem] rounded-lg shadow-xs border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 focus:outline-hidden"
+    popover="manual"
+    data-flux-menu
+>
+    <a href="https://playbooks.com/rules" class="flex items-center px-2 py-1.5 w-full focus:outline-hidden rounded-md text-start text-sm font-medium [&amp;[disabled]]:opacity-50 text-zinc-800 data-active:bg-zinc-50 dark:text-white dark:data-active:bg-zinc-600 **:data-flux-menu-item-icon:text-zinc-400 dark:**:data-flux-menu-item-icon:text-white/60 [&amp;[data-active]_[data-flux-menu-item-icon]]:text-current" data-flux-menu-item="data-flux-menu-item" wire:navigate="">
+        <div class="w-7 hidden [[data-flux-menu]:has(>[data-flux-menu-item-has-icon])_&]:block"></div>
+    
+    Cursor Rules
+    </a>
+                                <a href="https://playbooks.com/windsurf-rules" class="flex items-center px-2 py-1.5 w-full focus:outline-hidden rounded-md text-start text-sm font-medium [&amp;[disabled]]:opacity-50 text-zinc-800 data-active:bg-zinc-50 dark:text-white dark:data-active:bg-zinc-600 **:data-flux-menu-item-icon:text-zinc-400 dark:**:data-flux-menu-item-icon:text-white/60 [&amp;[data-active]_[data-flux-menu-item-icon]]:text-current" data-flux-menu-item="data-flux-menu-item" wire:navigate="">
+        <div class="w-7 hidden [[data-flux-menu]:has(>[data-flux-menu-item-has-icon])_&]:block"></div>
+    
+    Windsurf Rules
+    </a>
+</ui-menu>
+</ui-dropdown>
+                        <a href="https://playbooks.com/mcp" class="px-3 h-8 flex items-center rounded-lg relative px-2.5! text-zinc-500 dark:text-white/80  data-current:after:absolute data-current:after:-bottom-3 data-current:after:inset-x-0 data-current:after:h-[2px] [--hover-fill:color-mix(in_oklab,_var(--color-accent-content),_transparent_90%)] hover:text-zinc-800 dark:hover:text-white data-current:text-(--color-accent-content) hover:data-current:text-(--color-accent-content) hover:bg-zinc-800/5 dark:hover:bg-white/10 hover:data-current:bg-(--hover-fill) data-current:after:bg-(--color-accent-content)" data-flux-navbar-items="data-flux-navbar-items" wire:navigate="">
+        <div class=" flex-1 text-sm font-medium leading-none whitespace-nowrap [[data-nav-footer]_&]:hidden [[data-nav-sidebar]_[data-nav-footer]_&]:block" data-content>MCPs</div>
+    </a>
+                        <a href="https://playbooks.com/modes" class="px-3 h-8 flex items-center rounded-lg relative px-2.5! text-zinc-500 dark:text-white/80  data-current:after:absolute data-current:after:-bottom-3 data-current:after:inset-x-0 data-current:after:h-[2px] [--hover-fill:color-mix(in_oklab,_var(--color-accent-content),_transparent_90%)] hover:text-zinc-800 dark:hover:text-white data-current:text-(--color-accent-content) hover:data-current:text-(--color-accent-content) hover:bg-zinc-800/5 dark:hover:bg-white/10 hover:data-current:bg-(--hover-fill) data-current:after:bg-(--color-accent-content)" data-flux-navbar-items="data-flux-navbar-items" wire:navigate="">
+        <div class=" flex-1 text-sm font-medium leading-none whitespace-nowrap [[data-nav-footer]_&]:hidden [[data-nav-sidebar]_[data-nav-footer]_&]:block" data-content>Modes</div>
+    </a>
+                        <a href="https://playbooks.com/prompts" class="px-3 h-8 flex items-center rounded-lg relative px-2.5! text-zinc-500 dark:text-white/80  data-current:after:absolute data-current:after:-bottom-3 data-current:after:inset-x-0 data-current:after:h-[2px] [--hover-fill:color-mix(in_oklab,_var(--color-accent-content),_transparent_90%)] hover:text-zinc-800 dark:hover:text-white data-current:text-(--color-accent-content) hover:data-current:text-(--color-accent-content) hover:bg-zinc-800/5 dark:hover:bg-white/10 hover:data-current:bg-(--hover-fill) data-current:after:bg-(--color-accent-content)" data-flux-navbar-items="data-flux-navbar-items" wire:navigate="">
+        <div class=" flex-1 text-sm font-medium leading-none whitespace-nowrap [[data-nav-footer]_&]:hidden [[data-nav-sidebar]_[data-nav-footer]_&]:block" data-content>Prompts</div>
+    </a>
+</nav>
+                </div>
+            </div>
+
+            <!-- Auth Buttons -->
+            <div class="justify-end hidden gap-2 grow basis-0 lg:flex">
+                <!--[if BLOCK]><![endif]-->                    <a href="https://playbooks.com/login" class="relative items-center font-medium justify-center gap-2 whitespace-nowrap disabled:opacity-75 dark:disabled:opacity-75 disabled:cursor-default disabled:pointer-events-none h-8 text-sm rounded-md px-3 inline-flex  bg-white hover:bg-zinc-50 dark:bg-zinc-700 dark:hover:bg-zinc-600/75 text-zinc-800 dark:text-white border border-zinc-200 hover:border-zinc-200 border-b-zinc-300/80 dark:border-zinc-600 dark:hover:border-zinc-600 shadow-xs [[data-flux-button-group]_&amp;]:border-s-0 [:is([data-flux-button-group]&gt;&amp;:first-child,_[data-flux-button-group]_:first-child&gt;&amp;)]:border-s-[1px]" data-flux-button="data-flux-button" data-flux-group-target="data-flux-group-target" wire:navigate="">
+        Log in
+    </a>
+                <!--[if ENDBLOCK]><![endif]-->
+            </div>
+
+            <!-- Mobile Menu -->
+            <div class="lg:hidden">
+                <ui-dropdown position="bottom end"  data-flux-dropdown>
+    <button type="button" class="relative items-center font-medium justify-center gap-2 whitespace-nowrap disabled:opacity-75 dark:disabled:opacity-75 disabled:cursor-default disabled:pointer-events-none h-10 text-sm rounded-lg px-4 inline-flex  bg-transparent hover:bg-zinc-800/5 dark:hover:bg-white/15 text-zinc-800 dark:text-white" data-flux-button="data-flux-button">
+        <svg class="shrink-0 [:where(&amp;)]:size-6 w-6 h-6" data-flux-icon xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+  <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M12 17.25h8.25"/>
+</svg>
+
+                                <span class="sr-only">Menu</span>
+    </button>
+                    <ui-menu
+    class="[:where(&amp;)]:min-w-48 p-[.3125rem] rounded-lg shadow-xs border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 focus:outline-hidden"
+    popover="manual"
+    data-flux-menu
+>
+    <a href="https://playbooks.com/learn" class="flex items-center px-2 py-1.5 w-full focus:outline-hidden rounded-md text-start text-sm font-medium [&amp;[disabled]]:opacity-50 text-zinc-800 data-active:bg-zinc-50 dark:text-white dark:data-active:bg-zinc-600 **:data-flux-menu-item-icon:text-zinc-400 dark:**:data-flux-menu-item-icon:text-white/60 [&amp;[data-active]_[data-flux-menu-item-icon]]:text-current" data-flux-menu-item="data-flux-menu-item" wire:navigate="">
+        <div class="w-7 hidden [[data-flux-menu]:has(>[data-flux-menu-item-has-icon])_&]:block"></div>
+    
+    Learn
+    </a>
+                        <ui-submenu data-flux-menu-submenu>
+    <button type="button" class="flex items-center px-2 py-1.5 w-full focus:outline-hidden rounded-md text-start text-sm font-medium [&amp;[disabled]]:opacity-50 text-zinc-800 data-active:bg-zinc-50 dark:text-white dark:data-active:bg-zinc-600 **:data-flux-menu-item-icon:text-zinc-400 dark:**:data-flux-menu-item-icon:text-white/60 [&amp;[data-active]_[data-flux-menu-item-icon]]:text-current" data-flux-menu-item="data-flux-menu-item">
+        <div class="w-7 hidden [[data-flux-menu]:has(>[data-flux-menu-item-has-icon])_&]:block"></div>
+    
+    Rules
+
+                        <svg class="shrink-0 [:where(&amp;)]:size-5 ms-auto text-zinc-400 [[data-flux-menu-item]:hover_&amp;]:text-current  rtl:hidden rtl:hidden" data-flux-icon xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" data-slot="icon">
+  <path fill-rule="evenodd" d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/>
+</svg>
+
+                        <svg class="shrink-0 [:where(&amp;)]:size-5 ms-auto text-zinc-400 [[data-flux-menu-item]:hover_&amp;]:text-current  rtl:hidden rtl:hidden hidden rtl:inline hidden rtl:inline" data-flux-icon xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" data-slot="icon">
+  <path fill-rule="evenodd" d="M11.78 5.22a.75.75 0 0 1 0 1.06L8.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06l-4.25-4.25a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd"/>
+</svg>
+    </button>
+
+    <ui-menu
+    class="[:where(&amp;)]:min-w-48 p-[.3125rem] rounded-lg shadow-xs border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 focus:outline-hidden"
+    popover="manual"
+    data-flux-menu
+>
+    <a href="https://playbooks.com/rules" class="flex items-center px-2 py-1.5 w-full focus:outline-hidden rounded-md text-start text-sm font-medium [&amp;[disabled]]:opacity-50 text-zinc-800 data-active:bg-zinc-50 dark:text-white dark:data-active:bg-zinc-600 **:data-flux-menu-item-icon:text-zinc-400 dark:**:data-flux-menu-item-icon:text-white/60 [&amp;[data-active]_[data-flux-menu-item-icon]]:text-current" data-flux-menu-item="data-flux-menu-item" wire:navigate="">
+        <div class="w-7 hidden [[data-flux-menu]:has(>[data-flux-menu-item-has-icon])_&]:block"></div>
+    
+    Cursor Rules
+    </a>
+                            <a href="https://playbooks.com/windsurf-rules" class="flex items-center px-2 py-1.5 w-full focus:outline-hidden rounded-md text-start text-sm font-medium [&amp;[disabled]]:opacity-50 text-zinc-800 data-active:bg-zinc-50 dark:text-white dark:data-active:bg-zinc-600 **:data-flux-menu-item-icon:text-zinc-400 dark:**:data-flux-menu-item-icon:text-white/60 [&amp;[data-active]_[data-flux-menu-item-icon]]:text-current" data-flux-menu-item="data-flux-menu-item" wire:navigate="">
+        <div class="w-7 hidden [[data-flux-menu]:has(>[data-flux-menu-item-has-icon])_&]:block"></div>
+    
+    Windsurf Rules
+    </a>
+</ui-menu>
+</ui-submenu>
+                        <a href="https://playbooks.com/mcp" class="flex items-center px-2 py-1.5 w-full focus:outline-hidden rounded-md text-start text-sm font-medium [&amp;[disabled]]:opacity-50 text-zinc-800 data-active:bg-zinc-50 dark:text-white dark:data-active:bg-zinc-600 **:data-flux-menu-item-icon:text-zinc-400 dark:**:data-flux-menu-item-icon:text-white/60 [&amp;[data-active]_[data-flux-menu-item-icon]]:text-current" data-flux-menu-item="data-flux-menu-item" wire:navigate="">
+        <div class="w-7 hidden [[data-flux-menu]:has(>[data-flux-menu-item-has-icon])_&]:block"></div>
+    
+    MCPs
+    </a>
+                        <a href="https://playbooks.com/modes" class="flex items-center px-2 py-1.5 w-full focus:outline-hidden rounded-md text-start text-sm font-medium [&amp;[disabled]]:opacity-50 text-zinc-800 data-active:bg-zinc-50 dark:text-white dark:data-active:bg-zinc-600 **:data-flux-menu-item-icon:text-zinc-400 dark:**:data-flux-menu-item-icon:text-white/60 [&amp;[data-active]_[data-flux-menu-item-icon]]:text-current" data-flux-menu-item="data-flux-menu-item" wire:navigate="">
+        <div class="w-7 hidden [[data-flux-menu]:has(>[data-flux-menu-item-has-icon])_&]:block"></div>
+    
+    Modes
+    </a>
+                        
+                        <div class="-mx-[.3125rem] my-[.3125rem] h-px"  data-flux-menu-separator>
+    <div data-orientation="horizontal" role="none" class="border-0 [print-color-adjust:exact] bg-zinc-800/15 dark:bg-white/20 h-px w-full dark:bg-zinc-600!" data-flux-separator></div>
+</div>
+                        <a href="https://playbooks.com/tools/ai-image-editor" class="flex items-center px-2 py-1.5 w-full focus:outline-hidden rounded-md text-start text-sm font-medium [&amp;[disabled]]:opacity-50 text-zinc-800 data-active:bg-zinc-50 dark:text-white dark:data-active:bg-zinc-600 **:data-flux-menu-item-icon:text-zinc-400 dark:**:data-flux-menu-item-icon:text-white/60 [&amp;[data-active]_[data-flux-menu-item-icon]]:text-current" data-flux-menu-item="data-flux-menu-item" wire:navigate="">
+        <div class="w-7 hidden [[data-flux-menu]:has(>[data-flux-menu-item-has-icon])_&]:block"></div>
+    
+    AI Image Editor
+    </a>
+                        <div class="-mx-[.3125rem] my-[.3125rem] h-px"  data-flux-menu-separator>
+    <div data-orientation="horizontal" role="none" class="border-0 [print-color-adjust:exact] bg-zinc-800/15 dark:bg-white/20 h-px w-full dark:bg-zinc-600!" data-flux-separator></div>
+</div>
+
+                        <!--[if BLOCK]><![endif]-->                            <div class="-mx-[.3125rem] my-[.3125rem] h-px"  data-flux-menu-separator>
+    <div data-orientation="horizontal" role="none" class="border-0 [print-color-adjust:exact] bg-zinc-800/15 dark:bg-white/20 h-px w-full dark:bg-zinc-600!" data-flux-separator></div>
+</div>
+                            <a href="https://playbooks.com/login" class="flex items-center px-2 py-1.5 w-full focus:outline-hidden rounded-md text-start text-sm font-medium [&amp;[disabled]]:opacity-50 text-zinc-800 data-active:bg-zinc-50 dark:text-white dark:data-active:bg-zinc-600 **:data-flux-menu-item-icon:text-zinc-400 dark:**:data-flux-menu-item-icon:text-white/60 [&amp;[data-active]_[data-flux-menu-item-icon]]:text-current" data-flux-menu-item="data-flux-menu-item" data-flux-menu-item-has-icon="data-flux-menu-item-has-icon" wire:navigate="">
+        <svg class="shrink-0 [:where(&amp;)]:size-5 me-2" data-flux-menu-item-icon="data-flux-menu-item-icon" data-flux-icon xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" data-slot="icon">
+  <path fill-rule="evenodd" d="M17 4.25A2.25 2.25 0 0 0 14.75 2h-5.5A2.25 2.25 0 0 0 7 4.25v2a.75.75 0 0 0 1.5 0v-2a.75.75 0 0 1 .75-.75h5.5a.75.75 0 0 1 .75.75v11.5a.75.75 0 0 1-.75.75h-5.5a.75.75 0 0 1-.75-.75v-2a.75.75 0 0 0-1.5 0v2A2.25 2.25 0 0 0 9.25 18h5.5A2.25 2.25 0 0 0 17 15.75V4.25Z" clip-rule="evenodd"/>
+  <path fill-rule="evenodd" d="M1 10a.75.75 0 0 1 .75-.75h9.546l-1.048-.943a.75.75 0 1 1 1.004-1.114l2.5 2.25a.75.75 0 0 1 0 1.114l-2.5 2.25a.75.75 0 1 1-1.004-1.114l1.048-.943H1.75A.75.75 0 0 1 1 10Z" clip-rule="evenodd"/>
+</svg>
+
+            
+    Log in
+    </a>
+                        <!--[if ENDBLOCK]><![endif]-->
+</ui-menu>
+</ui-dropdown>
+            </div>
+        </div>
+    </div>
+</div>                <div wire:snapshot="{&quot;data&quot;:{&quot;rule&quot;:[null,{&quot;class&quot;:&quot;App\\Models\\Rule&quot;,&quot;key&quot;:4,&quot;s&quot;:&quot;mdl&quot;}],&quot;snippets&quot;:[null,{&quot;keys&quot;:[],&quot;class&quot;:&quot;Illuminate\\Database\\Eloquent\\Collection&quot;,&quot;modelClass&quot;:null,&quot;s&quot;:&quot;elcln&quot;}],&quot;cacheKey&quot;:&quot;rule_nextjs_1746125106_6309&quot;,&quot;cacheCleared&quot;:false,&quot;format&quot;:&quot;cursor&quot;},&quot;memo&quot;:{&quot;id&quot;:&quot;LhyR9AMREExYb3CbdAwi&quot;,&quot;name&quot;:&quot;volt-anonymous-fragment-eyJuYW1lIjoicnVsZXMuc2hvdyIsInBhdGgiOiJyZXNvdXJjZXNcL3ZpZXdzXC9wYWdlc1wvcnVsZXNcL1tzbHVnXS5ibGFkZS5waHAifQ==&quot;,&quot;path&quot;:&quot;rules\/nextjs&quot;,&quot;method&quot;:&quot;GET&quot;,&quot;children&quot;:[],&quot;scripts&quot;:[],&quot;assets&quot;:[],&quot;errors&quot;:[],&quot;locale&quot;:&quot;en&quot;},&quot;checksum&quot;:&quot;80dab39e6fd916cf871c0a1890bae50cb1a3a136660ce097c485983388e61f48&quot;}" wire:effects="[]" wire:id="LhyR9AMREExYb3CbdAwi">
+        <div class="relative px-4 py-16 max-w-2xl mx-auto text-center space-y-6">
+    <div class="absolute pattern-dots h-full"></div>
+    <h1 class="font-medium [:where(&amp;)]:text-zinc-800 [:where(&amp;)]:dark:text-white text-2xl [&amp;:has(+[data-flux-subheading])]:mb-2 [[data-flux-subheading]+&amp;]:mt-2 font-semibold text-3xl sm:text-4xl md:text-5xl" data-flux-heading><!--[if BLOCK]><![endif]-->                    Cursor Rules for</br>
+                    Next.js
+                <!--[if ENDBLOCK]><![endif]--></h1>
+
+                    <!--[if BLOCK]><![endif]-->                <div class="text-lg [:where(&amp;)]:text-zinc-500 [:where(&amp;)]:dark:text-white/70 mt-4" data-flux-subheading>
+    This rule explains Next.js conventions and best practices for fullstack development.
+</div>
+            <!--[if ENDBLOCK]><![endif]-->
+</div>
+
+        <div data-orientation="horizontal" role="none" class="border-0 [print-color-adjust:exact] bg-zinc-800/5 dark:bg-white/10 h-px w-full" data-flux-separator></div>
+
+        <div class="py-12 max-lg:mx-auto max-w-[40rem] lg:grid lg:grid-cols-[18rem_40rem_1fr]">
+            <div class="lg:sticky lg:top-8 lg:self-start space-y-6">
+                <a wire:navigate href="https://playbooks.com/rules" class="group flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300">
+                    <svg class="shrink-0 [:where(&amp;)]:size-6 size-4 group-hover:text-zinc-700 dark:group-hover:text-zinc-300" data-flux-icon xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+  <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18"/>
+</svg>
+
+                            Back to rules
+                </a>
+
+                <!--[if BLOCK]><![endif]--><!--[if ENDBLOCK]><![endif]-->
+
+                <div class="space-y-2">
+                    <div class="text-xs [:where(&amp;)]:text-zinc-500 [:where(&amp;)]:dark:text-white/70" data-flux-subheading>
+    Type
+</div>
+                    <div class="flex flex-wrap gap-2">
+                        <div data-flux-badge="data-flux-badge" class="inline-flex items-center font-medium whitespace-nowrap  [print-color-adjust:exact] text-xs py-1 **:data-flux-badge-icon:size-3 **:data-flux-badge-icon:me-1 rounded-md px-2 text-zinc-700 [&amp;_button]:text-zinc-700! dark:text-zinc-200 dark:[&amp;_button]:text-zinc-200! bg-zinc-400/15 dark:bg-zinc-400/40 [&amp;:is(button)]:hover:bg-zinc-400/25 dark:[button]:hover:bg-zinc-400/50">
+        Fullstack
+    </div>
+                    </div>
+                </div>
+
+                <!--[if BLOCK]><![endif]-->                <div class="space-y-2">
+                    <div class="text-xs [:where(&amp;)]:text-zinc-500 [:where(&amp;)]:dark:text-white/70" data-flux-subheading>
+    Language(s)
+</div>
+                    <div class="flex flex-wrap gap-2">
+                        <!--[if BLOCK]><![endif]-->                            <div data-flux-badge="data-flux-badge" class="inline-flex items-center font-medium whitespace-nowrap  [print-color-adjust:exact] text-xs py-1 **:data-flux-badge-icon:size-3 **:data-flux-badge-icon:me-1 rounded-md px-2 text-zinc-700 [&amp;_button]:text-zinc-700! dark:text-zinc-200 dark:[&amp;_button]:text-zinc-200! bg-zinc-400/15 dark:bg-zinc-400/40 [&amp;:is(button)]:hover:bg-zinc-400/25 dark:[button]:hover:bg-zinc-400/50">
+        JavaScript
+    </div>
+                                                    <div data-flux-badge="data-flux-badge" class="inline-flex items-center font-medium whitespace-nowrap  [print-color-adjust:exact] text-xs py-1 **:data-flux-badge-icon:size-3 **:data-flux-badge-icon:me-1 rounded-md px-2 text-zinc-700 [&amp;_button]:text-zinc-700! dark:text-zinc-200 dark:[&amp;_button]:text-zinc-200! bg-zinc-400/15 dark:bg-zinc-400/40 [&amp;:is(button)]:hover:bg-zinc-400/25 dark:[button]:hover:bg-zinc-400/50">
+        TypeScript
+    </div>
+                        <!--[if ENDBLOCK]><![endif]-->
+                    </div>
+                </div>
+                <!--[if ENDBLOCK]><![endif]-->
+
+                <!--[if BLOCK]><![endif]-->                <div class="space-y-2">
+                    <div class="text-xs [:where(&amp;)]:text-zinc-500 [:where(&amp;)]:dark:text-white/70" data-flux-subheading>
+    Tags
+</div>
+                    <div class="flex flex-wrap gap-2">
+                        <!--[if BLOCK]><![endif]-->                            <div data-flux-badge="data-flux-badge" class="inline-flex items-center font-medium whitespace-nowrap  [print-color-adjust:exact] text-xs py-1 **:data-flux-badge-icon:size-3 **:data-flux-badge-icon:me-1 rounded-md px-2 text-zinc-700 [&amp;_button]:text-zinc-700! dark:text-zinc-200 dark:[&amp;_button]:text-zinc-200! bg-zinc-400/15 dark:bg-zinc-400/40 [&amp;:is(button)]:hover:bg-zinc-400/25 dark:[button]:hover:bg-zinc-400/50">
+        Framework
+    </div>
+                        <!--[if ENDBLOCK]><![endif]-->
+                    </div>
+                </div>
+                <!--[if ENDBLOCK]><![endif]-->
+
+                <!--[if BLOCK]><![endif]-->
+                <!--[if ENDBLOCK]><![endif]-->
+
+                <!--[if BLOCK]><![endif]--><!--[if ENDBLOCK]><![endif]-->
+
+                <div class="space-y-2">
+                    <div class="text-xs [:where(&amp;)]:text-zinc-500 [:where(&amp;)]:dark:text-white/70" data-flux-subheading>
+    Stats
+</div>
+                    <div class="text-sm text-zinc-600 dark:text-zinc-400 space-y-1">
+                        <div>
+                            6,310 views
+                        </div>
+                        <div>
+                            917 copies
+                        </div>
+                        <div>
+                            218 downloads
+                        </div>
+                    </div>
+                </div>
+
+                <!--[if BLOCK]><![endif]--><!--[if ENDBLOCK]><![endif]-->
+
+                <!--[if BLOCK]><![endif]--><!--[if ENDBLOCK]><![endif]-->
+
+                <!--[if BLOCK]><![endif]--><!--[if ENDBLOCK]><![endif]-->
+            </div>
+
+            <div>
+                <div class="prose max-w-none mt-8 lg:mt-0">
+                    <ui-tab-group class="block" data-flux-tab-group>
+    <ui-tabs class="block inline-flex p-1 rounded-lg bg-zinc-800/5 dark:bg-white/10 h-8 py-[3px] px-[3px] -my-px h-[calc(2rem+2px)]" wire:model.live="format" data-flux-tabs>
+    <button type="button" class="flex whitespace-nowrap flex-1 justify-center items-center gap-2 rounded-md data-selected:shadow-xs text-sm font-medium text-zinc-600 hover:text-zinc-800 dark:hover:text-white dark:text-white/70 data-selected:text-zinc-800 dark:data-selected:text-white data-selected:bg-white dark:data-selected:bg-white/20 [&amp;[disabled]]:opacity-50 dark:[&amp;[disabled]]:opacity-75 [&amp;[disabled]]:cursor-default [&amp;[disabled]]:pointer-events-none px-3 text-sm" data-flux-tab="data-flux-tab" name="cursor" wire:key="cursor">
+        Cursor (.mdc)
+    </button>
+                            <button type="button" class="flex whitespace-nowrap flex-1 justify-center items-center gap-2 rounded-md data-selected:shadow-xs text-sm font-medium text-zinc-600 hover:text-zinc-800 dark:hover:text-white dark:text-white/70 data-selected:text-zinc-800 dark:data-selected:text-white data-selected:bg-white dark:data-selected:bg-white/20 [&amp;[disabled]]:opacity-50 dark:[&amp;[disabled]]:opacity-75 [&amp;[disabled]]:cursor-default [&amp;[disabled]]:pointer-events-none px-3 text-sm" data-flux-tab="data-flux-tab" name="windsurf" wire:key="windsurf">
+        Windsurf (.md)
+    </button>
+</ui-tabs>
+
+                        <div class="[&amp;:not([data-selected])]:hidden pt-8 !pt-0" name="cursor" wire:key="cursor" data-flux-tab-panel>
+    <div class="my-4 rounded-lg overflow-hidden border border-gray-700" x-data="{ copied: false }">
+                                <div class="bg-[#22272D]">
+                                    <div class="flex items-center justify-between border-b border-gray-700">
+                                        <div class="flex items-center pl-2 pt-1">
+                                            <div class="px-3 py-2 bg-[#22272D] text-xs font-medium text-gray-300 border-r border-t border-l border-gray-600 rounded-t-md relative -mb-px">
+                                                nextjs.mdc
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center pr-2">
+                                            <button type="button" class="relative items-center font-medium justify-center gap-2 whitespace-nowrap disabled:opacity-75 dark:disabled:opacity-75 disabled:cursor-default disabled:pointer-events-none h-6 text-xs rounded-md px-2 inline-flex  bg-transparent hover:bg-zinc-800/5 dark:hover:bg-white/15 text-zinc-800 dark:text-white     !text-white cursor-pointer mr-2" data-flux-button="data-flux-button" @click="copied = true; navigator.clipboard.writeText($refs.codeContainer.querySelector('code').textContent); $wire.trackCopy(); setTimeout(() => copied = false, 2000)">
+        <svg class="shrink-0 [:where(&amp;)]:size-4" data-flux-icon xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" data-slot="icon">
+  <path fill-rule="evenodd" d="M11.986 3H12a2 2 0 0 1 2 2v6a2 2 0 0 1-1.5 1.937v-2.523a2.5 2.5 0 0 0-.732-1.768L8.354 5.232A2.5 2.5 0 0 0 6.586 4.5H4.063A2 2 0 0 1 6 3h.014A2.25 2.25 0 0 1 8.25 1h1.5a2.25 2.25 0 0 1 2.236 2ZM10.5 4v-.75a.75.75 0 0 0-.75-.75h-1.5a.75.75 0 0 0-.75.75V4h3Z" clip-rule="evenodd"/>
+  <path d="M3 6a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1v-3.586a1 1 0 0 0-.293-.707L7.293 6.293A1 1 0 0 0 6.586 6H3Z"/>
+</svg>
+
+                
+                    <span x-text="copied ? 'Copied!' : 'Copy'">Copy</span>
+    </button>
+                                            <button type="button" class="relative items-center font-medium justify-center gap-2 whitespace-nowrap disabled:opacity-75 dark:disabled:opacity-75 disabled:cursor-default disabled:pointer-events-none h-6 text-xs rounded-md px-2 inline-flex  bg-transparent hover:bg-zinc-800/5 dark:hover:bg-white/15 text-zinc-800 dark:text-white     !text-white cursor-pointer" data-flux-button="data-flux-button" @click="$wire.trackDownload(); const blob = new Blob([$refs.codeContainer.querySelector('code').textContent], {type: 'text/plain'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'nextjs.mdc'; a.click(); URL.revokeObjectURL(url);">
+        <svg class="shrink-0 [:where(&amp;)]:size-4" data-flux-icon xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" data-slot="icon">
+  <path d="M8.75 2.75a.75.75 0 0 0-1.5 0v5.69L5.03 6.22a.75.75 0 0 0-1.06 1.06l3.5 3.5a.75.75 0 0 0 1.06 0l3.5-3.5a.75.75 0 0 0-1.06-1.06L8.75 8.44V2.75Z"/>
+  <path d="M3.5 9.75a.75.75 0 0 0-1.5 0v1.5A2.75 2.75 0 0 0 4.75 14h6.5A2.75 2.75 0 0 0 14 11.25v-1.5a.75.75 0 0 0-1.5 0v1.5c0 .69-.56 1.25-1.25 1.25h-6.5c-.69 0-1.25-.56-1.25-1.25v-1.5Z"/>
+</svg>
+
+                
+                    Download
+    </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="bg-[#22272D] px-3 py-2 font-mono leading-relaxed [&_pre]:!whitespace-pre-wrap [&_code]:!whitespace-pre-wrap [&_pre]:!overflow-x-visible [&_code]:!overflow-x-visible [&_pre]:!m-0" x-ref="codeContainer">
+                                    
+                                    <pre class="shiki" style="background-color: #22272e"><code><span class="line"><span style="color:#6CB6FF;font-weight: bold">---</span></span>
+<span class="line"><span style="color:#ADBAC7">description: This rule explains Next.js conventions and best practices for fullstack development.</span></span>
+<span class="line"><span style="color:#ADBAC7">globs: </span><span style="color:#ADBAC7;font-weight: bold">**/</span><span style="color:#ADBAC7;font-style: italic">*.js,</span><span style="color:#ADBAC7;font-weight: bold">**/</span><span style="color:#ADBAC7;font-style: italic">*.jsx,</span><span style="color:#ADBAC7;font-weight: bold">**/</span><span style="color:#ADBAC7;font-style: italic">*.ts,**</span><span style="color:#ADBAC7;font-weight: bold">/*.tsx</span></span>
+<span class="line"><span style="color:#ADBAC7">alwaysApply: false</span></span>
+<span class="line"><span style="color:#6CB6FF;font-weight: bold">---</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6CB6FF;font-weight: bold"># Next.js rules</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Use the App Router structure with </span><span style="color:#6CB6FF">`page.tsx`</span><span style="color:#ADBAC7"> files in route directories.</span></span>
+<span class="line"><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Client components must be explicitly marked with </span><span style="color:#6CB6FF">`&#39;use client&#39;`</span><span style="color:#ADBAC7"> at the top of the file.</span></span>
+<span class="line"><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Use kebab-case for directory names (e.g., </span><span style="color:#6CB6FF">`components/auth-form`</span><span style="color:#ADBAC7">) and PascalCase for component files.</span></span>
+<span class="line"><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Prefer named exports over default exports, i.e. </span><span style="color:#6CB6FF">`export function Button() { /* ... */ }`</span><span style="color:#ADBAC7"> instead of </span><span style="color:#6CB6FF">`export default function Button() { /* ... */ }`</span><span style="color:#ADBAC7">.</span></span>
+<span class="line"><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Minimize </span><span style="color:#6CB6FF">`&#39;use client&#39;`</span><span style="color:#ADBAC7"> directives:</span></span>
+<span class="line"><span style="color:#ADBAC7">  </span><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Keep most components as React Server Components (RSC)</span></span>
+<span class="line"><span style="color:#ADBAC7">  </span><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Only use client components when you need interactivity and wrap in </span><span style="color:#6CB6FF">`Suspense`</span><span style="color:#ADBAC7"> with fallback UI</span></span>
+<span class="line"><span style="color:#ADBAC7">  </span><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Create small client component wrappers around interactive elements</span></span>
+<span class="line"><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Avoid unnecessary </span><span style="color:#6CB6FF">`useState`</span><span style="color:#ADBAC7"> and </span><span style="color:#6CB6FF">`useEffect`</span><span style="color:#ADBAC7"> when possible:</span></span>
+<span class="line"><span style="color:#ADBAC7">  </span><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Use server components for data fetching</span></span>
+<span class="line"><span style="color:#ADBAC7">  </span><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Use React Server Actions for form handling</span></span>
+<span class="line"><span style="color:#ADBAC7">  </span><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Use URL search params for shareable state</span></span>
+<span class="line"><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Use </span><span style="color:#6CB6FF">`nuqs`</span><span style="color:#ADBAC7"> for URL search param state management</span></span></code></pre>
+                                </div>
+                            </div>
+</div>
+
+                        <div class="[&amp;:not([data-selected])]:hidden pt-8 !pt-0" name="windsurf" wire:key="windsurf" data-flux-tab-panel>
+    <div class="my-4 rounded-lg overflow-hidden border border-gray-700" x-data="{ copied: false }">
+                                <div class="bg-[#22272D]">
+                                    <div class="flex items-center justify-between border-b border-gray-700">
+                                        <div class="flex items-center pl-2 pt-1">
+                                            <div class="px-3 py-2 bg-[#22272D] text-xs font-medium text-gray-300 border-r border-t border-l border-gray-600 rounded-t-md relative -mb-px">
+                                                nextjs.md
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center pr-2">
+                                            <button type="button" class="relative items-center font-medium justify-center gap-2 whitespace-nowrap disabled:opacity-75 dark:disabled:opacity-75 disabled:cursor-default disabled:pointer-events-none h-6 text-xs rounded-md px-2 inline-flex  bg-transparent hover:bg-zinc-800/5 dark:hover:bg-white/15 text-zinc-800 dark:text-white     !text-white cursor-pointer mr-2" data-flux-button="data-flux-button" @click="copied = true; navigator.clipboard.writeText($refs.codeContainer.querySelector('code').textContent); $wire.trackCopy(); setTimeout(() => copied = false, 2000)">
+        <svg class="shrink-0 [:where(&amp;)]:size-4" data-flux-icon xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" data-slot="icon">
+  <path fill-rule="evenodd" d="M11.986 3H12a2 2 0 0 1 2 2v6a2 2 0 0 1-1.5 1.937v-2.523a2.5 2.5 0 0 0-.732-1.768L8.354 5.232A2.5 2.5 0 0 0 6.586 4.5H4.063A2 2 0 0 1 6 3h.014A2.25 2.25 0 0 1 8.25 1h1.5a2.25 2.25 0 0 1 2.236 2ZM10.5 4v-.75a.75.75 0 0 0-.75-.75h-1.5a.75.75 0 0 0-.75.75V4h3Z" clip-rule="evenodd"/>
+  <path d="M3 6a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1v-3.586a1 1 0 0 0-.293-.707L7.293 6.293A1 1 0 0 0 6.586 6H3Z"/>
+</svg>
+
+                
+                    <span x-text="copied ? 'Copied!' : 'Copy'">Copy</span>
+    </button>
+                                            <button type="button" class="relative items-center font-medium justify-center gap-2 whitespace-nowrap disabled:opacity-75 dark:disabled:opacity-75 disabled:cursor-default disabled:pointer-events-none h-6 text-xs rounded-md px-2 inline-flex  bg-transparent hover:bg-zinc-800/5 dark:hover:bg-white/15 text-zinc-800 dark:text-white     !text-white cursor-pointer" data-flux-button="data-flux-button" @click="$wire.trackDownload(); const blob = new Blob([$refs.codeContainer.querySelector('code').textContent], {type: 'text/plain'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'nextjs.md'; a.click(); URL.revokeObjectURL(url);">
+        <svg class="shrink-0 [:where(&amp;)]:size-4" data-flux-icon xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" data-slot="icon">
+  <path d="M8.75 2.75a.75.75 0 0 0-1.5 0v5.69L5.03 6.22a.75.75 0 0 0-1.06 1.06l3.5 3.5a.75.75 0 0 0 1.06 0l3.5-3.5a.75.75 0 0 0-1.06-1.06L8.75 8.44V2.75Z"/>
+  <path d="M3.5 9.75a.75.75 0 0 0-1.5 0v1.5A2.75 2.75 0 0 0 4.75 14h6.5A2.75 2.75 0 0 0 14 11.25v-1.5a.75.75 0 0 0-1.5 0v1.5c0 .69-.56 1.25-1.25 1.25h-6.5c-.69 0-1.25-.56-1.25-1.25v-1.5Z"/>
+</svg>
+
+                
+                    Download
+    </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="bg-[#22272D] px-3 py-2 font-mono leading-relaxed [&_pre]:!whitespace-pre-wrap [&_code]:!whitespace-pre-wrap [&_pre]:!overflow-x-visible [&_code]:!overflow-x-visible [&_pre]:!m-0" x-ref="codeContainer">
+                                    
+                                    <pre class="shiki" style="background-color: #22272e"><code><span class="line"><span style="color:#6CB6FF;font-weight: bold">---</span></span>
+<span class="line"><span style="color:#ADBAC7">trigger: glob</span></span>
+<span class="line"><span style="color:#ADBAC7">description: This rule explains Next.js conventions and best practices for fullstack development.</span></span>
+<span class="line"><span style="color:#ADBAC7">globs: </span><span style="color:#ADBAC7;font-weight: bold">**/</span><span style="color:#ADBAC7;font-style: italic">*.js,</span><span style="color:#ADBAC7;font-weight: bold">**/</span><span style="color:#ADBAC7;font-style: italic">*.jsx,</span><span style="color:#ADBAC7;font-weight: bold">**/</span><span style="color:#ADBAC7;font-style: italic">*.ts,**</span><span style="color:#ADBAC7;font-weight: bold">/*.tsx</span></span>
+<span class="line"><span style="color:#ADBAC7;font-weight: bold">---</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6CB6FF;font-weight: bold"># Next.js rules</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Use the App Router structure with </span><span style="color:#6CB6FF">`page.tsx`</span><span style="color:#ADBAC7"> files in route directories.</span></span>
+<span class="line"><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Client components must be explicitly marked with </span><span style="color:#6CB6FF">`&#39;use client&#39;`</span><span style="color:#ADBAC7"> at the top of the file.</span></span>
+<span class="line"><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Use kebab-case for directory names (e.g., </span><span style="color:#6CB6FF">`components/auth-form`</span><span style="color:#ADBAC7">) and PascalCase for component files.</span></span>
+<span class="line"><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Prefer named exports over default exports, i.e. </span><span style="color:#6CB6FF">`export function Button() { /* ... */ }`</span><span style="color:#ADBAC7"> instead of </span><span style="color:#6CB6FF">`export default function Button() { /* ... */ }`</span><span style="color:#ADBAC7">.</span></span>
+<span class="line"><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Minimize </span><span style="color:#6CB6FF">`&#39;use client&#39;`</span><span style="color:#ADBAC7"> directives:</span></span>
+<span class="line"><span style="color:#ADBAC7">  </span><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Keep most components as React Server Components (RSC)</span></span>
+<span class="line"><span style="color:#ADBAC7">  </span><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Only use client components when you need interactivity and wrap in </span><span style="color:#6CB6FF">`Suspense`</span><span style="color:#ADBAC7"> with fallback UI</span></span>
+<span class="line"><span style="color:#ADBAC7">  </span><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Create small client component wrappers around interactive elements</span></span>
+<span class="line"><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Avoid unnecessary </span><span style="color:#6CB6FF">`useState`</span><span style="color:#ADBAC7"> and </span><span style="color:#6CB6FF">`useEffect`</span><span style="color:#ADBAC7"> when possible:</span></span>
+<span class="line"><span style="color:#ADBAC7">  </span><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Use server components for data fetching</span></span>
+<span class="line"><span style="color:#ADBAC7">  </span><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Use React Server Actions for form handling</span></span>
+<span class="line"><span style="color:#ADBAC7">  </span><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Use URL search params for shareable state</span></span>
+<span class="line"><span style="color:#F69D50">-</span><span style="color:#ADBAC7"> Use </span><span style="color:#6CB6FF">`nuqs`</span><span style="color:#ADBAC7"> for URL search param state management</span></span></code></pre>
+                                </div>
+                            </div>
+</div>
+</ui-tab-group>
+                </div>
+                <div class="mt-6 flex flex-wrap gap-3">
+                                        <a href="https://playbooks.com/rules/add/nextjs" class="relative items-center font-medium justify-center gap-2 whitespace-nowrap disabled:opacity-75 dark:disabled:opacity-75 disabled:cursor-default disabled:pointer-events-none h-8 text-sm rounded-md px-3 inline-flex  bg-white hover:bg-zinc-50 dark:bg-zinc-700 dark:hover:bg-zinc-600/75 text-zinc-800 dark:text-white border border-zinc-200 hover:border-zinc-200 border-b-zinc-300/80 dark:border-zinc-600 dark:hover:border-zinc-600 shadow-xs [[data-flux-button-group]_&amp;]:border-s-0 [:is([data-flux-button-group]&gt;&amp;:first-child,_[data-flux-button-group]_:first-child&gt;&amp;)]:border-s-[1px]" data-flux-button="data-flux-button" data-flux-group-target="data-flux-group-target" wire:navigate="">
+        <svg class="shrink-0 [:where(&amp;)]:size-6 mr-2 size-4" data-flux-icon xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+  <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
+</svg>
+
+                                Add a snippet
+    </a>
+                    <!--[if ENDBLOCK]><![endif]-->
+
+                    <a href="https://playbooks.com/rules/suggest/nextjs" class="relative items-center font-medium justify-center gap-2 whitespace-nowrap disabled:opacity-75 dark:disabled:opacity-75 disabled:cursor-default disabled:pointer-events-none h-8 text-sm rounded-md px-3 inline-flex  bg-white hover:bg-zinc-50 dark:bg-zinc-700 dark:hover:bg-zinc-600/75 text-zinc-800 dark:text-white border border-zinc-200 hover:border-zinc-200 border-b-zinc-300/80 dark:border-zinc-600 dark:hover:border-zinc-600 shadow-xs [[data-flux-button-group]_&amp;]:border-s-0 [:is([data-flux-button-group]&gt;&amp;:first-child,_[data-flux-button-group]_:first-child&gt;&amp;)]:border-s-[1px]" data-flux-button="data-flux-button" data-flux-group-target="data-flux-group-target" wire:navigate="">
+        <svg class="shrink-0 [:where(&amp;)]:size-6 mr-2 size-4" data-flux-icon xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" data-slot="icon">
+  <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10"/>
+</svg>
+
+                                Suggest changes
+    </a>
+                </div>
+
+                <!--[if BLOCK]><![endif]--><!--[if ENDBLOCK]><![endif]-->
+
+                
+                <!--[if BLOCK]><![endif]-->                <div class="mt-12">
+                    <div class="prose max-w-none dark:prose-invert [&>*]:space-y-4">
+                        <div ><p>This rule provides guidance for Next.js development within Cursor, focusing on best practices for the App Router structure, component organization, and efficient state management techniques. It helps ensure your Next.js projects follow modern conventions and performance standards.</p>
+<h2 id="what-this-rule-does">What this rule does</h2>
+<p>The Next.js rule in Cursor serves as a comprehensive guide for fullstack development using Next.js, particularly with the newer App Router architecture. It establishes conventions for:</p>
+<ul>
+<li>File structure and naming conventions</li>
+<li>Proper usage of Server and Client Components</li>
+<li>Export patterns and component organization</li>
+<li>State management optimization</li>
+<li>Performance best practices</li>
+</ul>
+<p>These guidelines help maintain consistency across your Next.js projects while promoting patterns that enhance performance and developer experience.</p>
+<h2 id="key-nextjs-conventions">Key Next.js conventions</h2>
+<h3 id="app-router-structure">App Router structure</h3>
+<p>The rule emphasizes using the App Router structure, which uses directory-based routing with <code>page.tsx</code> files within route directories. This approach, introduced in Next.js 13, replaces the older Pages Router system with a more intuitive and flexible routing mechanism.</p>
+<h3 id="component-organization">Component organization</h3>
+<p>Several important component practices are recommended:</p>
+<ul>
+<li>Use kebab-case for directory names (e.g., <code>components/auth-form</code>)</li>
+<li>Use PascalCase for component files</li>
+<li>Prefer named exports over default exports:</li>
+</ul>
+<pre class="shiki" style="background-color: #fff"><code><span class="line"><span style="color:#6A737D">// Recommended</span></span>
+<span class="line"><span style="color:#D73A49">export</span><span style="color:#24292E"> </span><span style="color:#D73A49">function</span><span style="color:#24292E"> </span><span style="color:#6F42C1">Button</span><span style="color:#24292E">() { </span></span>
+<span class="line"><span style="color:#24292E">  </span><span style="color:#6A737D">/* ... */</span><span style="color:#24292E"> </span></span>
+<span class="line"><span style="color:#24292E">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">// Not recommended</span></span>
+<span class="line"><span style="color:#D73A49">export</span><span style="color:#24292E"> </span><span style="color:#D73A49">default</span><span style="color:#24292E"> </span><span style="color:#D73A49">function</span><span style="color:#24292E"> </span><span style="color:#6F42C1">Button</span><span style="color:#24292E">() { </span></span>
+<span class="line"><span style="color:#24292E">  </span><span style="color:#6A737D">/* ... */</span><span style="color:#24292E"> </span></span>
+<span class="line"><span style="color:#24292E">}</span></span>
+<span class="line"></span></code></pre>
+<h3 id="client-vs-server-components">Client vs. Server Components</h3>
+<p>The rule provides guidance on the effective use of React Server Components (RSC) and Client Components:</p>
+<ul>
+<li>Server Components are the default in Next.js App Router</li>
+<li>Only mark components with <code>'use client'</code> when they require client-side interactivity</li>
+<li>Minimize the use of client components to improve performance</li>
+<li>Create small client component wrappers around interactive elements</li>
+<li>Wrap client components in <code>Suspense</code> with appropriate fallback UI</li>
+</ul>
+<h3 id="state-management">State management</h3>
+<p>The rule recommends optimizing state management by:</p>
+<ul>
+<li>Using server components for data fetching rather than client-side fetching</li>
+<li>Leveraging React Server Actions for form handling</li>
+<li>Using URL search parameters for shareable state</li>
+<li>Utilizing the <code>nuqs</code> library for URL search parameter state management</li>
+</ul>
+<h2 id="using-nextjs-in-cursor">Using Next.js in Cursor</h2>
+<p>The Next.js rule (<code>nextjs.mdc</code>) is configured to automatically activate when you're working with JavaScript or TypeScript files. The glob pattern <code>**/*.js,**/*.jsx,**/*.ts,**/*.tsx</code> ensures that the AI gets this context whenever you're editing relevant files.</p>
+<p>When active, this rule guides Cursor's AI to make recommendations and generate code that follows Next.js best practices. For example:</p>
+<ul>
+<li>When creating new components, the AI will suggest named exports rather than default exports</li>
+<li>When implementing interactive features, it will recommend patterns that minimize client components</li>
+<li>When organizing your project, it will follow the proper directory structure conventions</li>
+</ul>
+<p>You can also manually invoke this rule by typing <code>@nextjs</code> in Cursor's Cmd-K interface or chat if you need explicit Next.js guidance for a specific task.</p>
+<h2 id="usage-tips">Usage tips</h2>
+<h3 id="minimizing-client-components">Minimizing client components</h3>
+<p>One of the key performance optimizations in modern Next.js is minimizing the use of client components. Consider this pattern for interactive elements:</p>
+<pre class="shiki" style="background-color: #fff"><code><span class="line"><span style="color:#6A737D">// ButtonWrapper.tsx - Small client component</span></span>
+<span class="line"><span style="color:#032F62">&#39;use client&#39;</span></span>
+<span class="line"><span style="color:#24292E"> </span></span>
+<span class="line"><span style="color:#D73A49">import</span><span style="color:#24292E"> { useState } </span><span style="color:#D73A49">from</span><span style="color:#24292E"> </span><span style="color:#032F62">&#39;react&#39;</span></span>
+<span class="line"><span style="color:#24292E"> </span></span>
+<span class="line"><span style="color:#D73A49">export</span><span style="color:#24292E"> </span><span style="color:#D73A49">function</span><span style="color:#24292E"> </span><span style="color:#6F42C1">ButtonWrapper</span><span style="color:#24292E">({ </span><span style="color:#E36209">children</span><span style="color:#24292E"> }) {</span></span>
+<span class="line"><span style="color:#24292E">  </span><span style="color:#D73A49">const</span><span style="color:#24292E"> [</span><span style="color:#005CC5">count</span><span style="color:#24292E">, </span><span style="color:#005CC5">setCount</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> </span><span style="color:#6F42C1">useState</span><span style="color:#24292E">(</span><span style="color:#005CC5">0</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">  </span></span>
+<span class="line"><span style="color:#24292E">  </span><span style="color:#D73A49">return</span><span style="color:#24292E"> (</span></span>
+<span class="line"><span style="color:#24292E">    &lt;</span><span style="color:#22863A">button</span><span style="color:#24292E"> </span><span style="color:#6F42C1">onClick</span><span style="color:#D73A49">=</span><span style="color:#24292E">{() </span><span style="color:#D73A49">=&gt;</span><span style="color:#24292E"> </span><span style="color:#6F42C1">setCount</span><span style="color:#24292E">(count </span><span style="color:#D73A49">+</span><span style="color:#24292E"> </span><span style="color:#005CC5">1</span><span style="color:#24292E">)}&gt;</span></span>
+<span class="line"><span style="color:#24292E">      {children} {count}</span></span>
+<span class="line"><span style="color:#24292E">    &lt;/</span><span style="color:#22863A">button</span><span style="color:#24292E">&gt;</span></span>
+<span class="line"><span style="color:#24292E">  )</span></span>
+<span class="line"><span style="color:#24292E">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">// Page.tsx - Server component that uses the client component</span></span>
+<span class="line"><span style="color:#D73A49">import</span><span style="color:#24292E"> { ButtonWrapper } </span><span style="color:#D73A49">from</span><span style="color:#24292E"> </span><span style="color:#032F62">&#39;./ButtonWrapper&#39;</span></span>
+<span class="line"><span style="color:#24292E"> </span></span>
+<span class="line"><span style="color:#D73A49">export</span><span style="color:#24292E"> </span><span style="color:#D73A49">default</span><span style="color:#24292E"> </span><span style="color:#D73A49">function</span><span style="color:#24292E"> </span><span style="color:#6F42C1">Page</span><span style="color:#24292E">() {</span></span>
+<span class="line"><span style="color:#24292E">  </span><span style="color:#6A737D">// This component remains a server component</span></span>
+<span class="line"><span style="color:#24292E">  </span><span style="color:#D73A49">return</span><span style="color:#24292E"> (</span></span>
+<span class="line"><span style="color:#24292E">    &lt;</span><span style="color:#22863A">div</span><span style="color:#24292E">&gt;</span></span>
+<span class="line"><span style="color:#24292E">      &lt;</span><span style="color:#22863A">h1</span><span style="color:#24292E">&gt;My Page&lt;/</span><span style="color:#22863A">h1</span><span style="color:#24292E">&gt;</span></span>
+<span class="line"><span style="color:#24292E">      &lt;</span><span style="color:#005CC5">ButtonWrapper</span><span style="color:#24292E">&gt;Click me&lt;/</span><span style="color:#005CC5">ButtonWrapper</span><span style="color:#24292E">&gt;</span></span>
+<span class="line"><span style="color:#24292E">    &lt;/</span><span style="color:#22863A">div</span><span style="color:#24292E">&gt;</span></span>
+<span class="line"><span style="color:#24292E">  )</span></span>
+<span class="line"><span style="color:#24292E">}</span></span>
+<span class="line"></span></code></pre>
+<h3 id="using-url-state-effectively">Using URL state effectively</h3>
+<p>For state that needs to be shareable or persisted between page loads, the rule recommends using URL search parameters with the <code>nuqs</code> library:</p>
+<pre class="shiki" style="background-color: #fff"><code><span class="line"><span style="color:#032F62">&#39;use client&#39;</span></span>
+<span class="line"><span style="color:#24292E"> </span></span>
+<span class="line"><span style="color:#D73A49">import</span><span style="color:#24292E"> { useQueryState } </span><span style="color:#D73A49">from</span><span style="color:#24292E"> </span><span style="color:#032F62">&#39;nuqs&#39;</span></span>
+<span class="line"><span style="color:#24292E"> </span></span>
+<span class="line"><span style="color:#D73A49">export</span><span style="color:#24292E"> </span><span style="color:#D73A49">function</span><span style="color:#24292E"> </span><span style="color:#6F42C1">FilterComponent</span><span style="color:#24292E">() {</span></span>
+<span class="line"><span style="color:#24292E">  </span><span style="color:#6A737D">// This will manage the &#39;category&#39; state in the URL</span></span>
+<span class="line"><span style="color:#24292E">  </span><span style="color:#D73A49">const</span><span style="color:#24292E"> [</span><span style="color:#005CC5">category</span><span style="color:#24292E">, </span><span style="color:#005CC5">setCategory</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> </span><span style="color:#6F42C1">useQueryState</span><span style="color:#24292E">(</span><span style="color:#032F62">&#39;category&#39;</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">  </span></span>
+<span class="line"><span style="color:#24292E">  </span><span style="color:#D73A49">return</span><span style="color:#24292E"> (</span></span>
+<span class="line"><span style="color:#24292E">    &lt;</span><span style="color:#22863A">select</span><span style="color:#24292E"> </span></span>
+<span class="line"><span style="color:#24292E">      </span><span style="color:#6F42C1">value</span><span style="color:#D73A49">=</span><span style="color:#24292E">{category </span><span style="color:#D73A49">||</span><span style="color:#24292E"> </span><span style="color:#032F62">&#39;&#39;</span><span style="color:#24292E">}</span></span>
+<span class="line"><span style="color:#24292E">      </span><span style="color:#6F42C1">onChange</span><span style="color:#D73A49">=</span><span style="color:#24292E">{(</span><span style="color:#E36209">e</span><span style="color:#24292E">) </span><span style="color:#D73A49">=&gt;</span><span style="color:#24292E"> </span><span style="color:#6F42C1">setCategory</span><span style="color:#24292E">(e.target.value)}</span></span>
+<span class="line"><span style="color:#24292E">    &gt;</span></span>
+<span class="line"><span style="color:#24292E">      &lt;</span><span style="color:#22863A">option</span><span style="color:#24292E"> </span><span style="color:#6F42C1">value</span><span style="color:#D73A49">=</span><span style="color:#032F62">&quot;&quot;</span><span style="color:#24292E">&gt;All&lt;/</span><span style="color:#22863A">option</span><span style="color:#24292E">&gt;</span></span>
+<span class="line"><span style="color:#24292E">      &lt;</span><span style="color:#22863A">option</span><span style="color:#24292E"> </span><span style="color:#6F42C1">value</span><span style="color:#D73A49">=</span><span style="color:#032F62">&quot;electronics&quot;</span><span style="color:#24292E">&gt;Electronics&lt;/</span><span style="color:#22863A">option</span><span style="color:#24292E">&gt;</span></span>
+<span class="line"><span style="color:#24292E">      &lt;</span><span style="color:#22863A">option</span><span style="color:#24292E"> </span><span style="color:#6F42C1">value</span><span style="color:#D73A49">=</span><span style="color:#032F62">&quot;clothing&quot;</span><span style="color:#24292E">&gt;Clothing&lt;/</span><span style="color:#22863A">option</span><span style="color:#24292E">&gt;</span></span>
+<span class="line"><span style="color:#24292E">    &lt;/</span><span style="color:#22863A">select</span><span style="color:#24292E">&gt;</span></span>
+<span class="line"><span style="color:#24292E">  )</span></span>
+<span class="line"><span style="color:#24292E">}</span></span>
+<span class="line"></span></code></pre>
+<p>Following these practices will help you build performant, maintainable Next.js applications that leverage the full capabilities of the framework.</p>
+</div>
+                    </div>
+                </div>
+                <!--[if ENDBLOCK]><![endif]-->
+            </div>
+        </div>
+    </div>
+                    <nav x-data="{ open: false, logoutConfirmation: false }" class="mt-auto">
+    <!-- Primary Navigation Menu -->
+    <div class="w-full max-w-7xl mx-auto">
+        <div class="flex justify-between h-16">
+            <div class="flex items-center gap-2 text-xs sm:gap-4">
+                <!--[if BLOCK]><![endif]--><!--[if ENDBLOCK]><![endif]-->
+<svg
+    viewBox="0 0 97 88"
+    version="1.1"
+    xmlns="http://www.w3.org/2000/svg"
+    xmlns:xlink="http://www.w3.org/1999/xlink"
+    class="w-5 h-4 hidden p-0 sm:flex" grayscale="grayscale"
+>
+    <g id="Page-1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g fill="var(--color-accent-content)">
+            <polygon id="Path" points="63.4552 9.80431 44.7379 0 0.813984 43.3382 0 44.1301 39.2172 65.3601 54.6665 49.3167 34.7582 39.2822"></polygon>
+            <polygon id="Path" points="33.1633 77.3113 51.8806 87.1156 95.8313 43.751 96.6218 42.982 57.5255 22.1081 42.0761 38.1515 61.7673 47.929"></polygon>
+        </g>
+    </g>
+</svg>
+<!--[if BLOCK]><![endif]--><!--[if ENDBLOCK]><![endif]-->
+                <div class="flex items-center">
+                    <span class="font-mono">
+                        <a wire:navigate href="https://playbooks.com/privacy">Privacy</a>
+                    </span>
+                    <span class="px-2">/</span>
+                    <span class="font-mono">
+                        <a wire:navigate href="https://playbooks.com/terms">Terms</a>
+                    </span>
+                    <span class="px-2">/</span>
+                    <span class="font-mono">
+                        <a wire:navigate href="https://playbooks.com/advertise">Advertise</a>
+                    </span>
+                </div>
+            </div>
+
+            <div class="flex items-center text-xs">
+                <div class="font-mono">
+                   <div
+    class="inline-block overflow-hidden text-right align-bottom transition-all duration-300 sm:w-24"
+    x-data="{
+        words: JSON.parse('[\u0022Made\u0022,\u0022Built\u0022,\u0022Created\u0022,\u0022Composed\u0022,\u0022Hacked\u0022,\u0022Brewed\u0022,\u0022Crafted\u0022,\u0022Forged\u0022,\u0022Designed\u0022,\u0022Developed\u0022,\u0022Produced\u0022]'),
+        currentIndex: 0,
+        scrambledText: '',
+        isInitialized: false,
+        startOnView: false,
+        CHARACTERS: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
+        getRandomChar() {
+            return this.CHARACTERS[Math.floor(Math.random() * this.CHARACTERS.length)];
+        },
+        initScramble() {
+            if (this.startOnView) {
+                this.setupIntersectionObserver();
+            } else {
+                this.startRotation();
+            }
+        },
+        setupIntersectionObserver() {
+            const observer = new IntersectionObserver((entries) => {
+                if (entries[0].isIntersecting && !this.isInitialized) {
+                    this.startRotation();
+                    observer.disconnect();
+                }
+            }, { threshold: 0.1 });
+            observer.observe(this.$el);
+        },
+        async startRotation() {
+            if (this.isInitialized) return;
+            this.isInitialized = true;
+
+            this.scrambledText = this.words[0];
+
+            while (true) {
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                const nextIndex = (this.currentIndex + 1) % this.words.length;
+                await this.scrambleTransition(this.words[nextIndex]);
+                this.currentIndex = nextIndex;
+            }
+        },
+        async scrambleTransition(toWord) {
+            const steps = 20;
+            const stepDuration = 50;
+
+            for (let i = 0; i <= steps; i++) {
+                this.scrambledText = toWord.split('').map((char, index) => {
+                    if (i === steps) return toWord[index] || ' ';
+                    return Math.random() < i / steps ? (toWord[index] || ' ') : this.getRandomChar();
+                }).join('');
+                await new Promise(resolve => setTimeout(resolve, stepDuration));
+            }
+        }
+    }"
+    x-init="initScramble()"
+    class=""
+>
+    <span x-text="scrambledText"></span>
+</div>
+
+ by <a href="https://x.com/iannuttall" target="_blank" class="underline">Ian Nuttall</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</nav>
+
+                            <div wire:snapshot="{&quot;data&quot;:{&quot;isLoggedIn&quot;:false},&quot;memo&quot;:{&quot;id&quot;:&quot;d8WPOguFQXqrkjQdTXBH&quot;,&quot;name&quot;:&quot;join-modal&quot;,&quot;path&quot;:&quot;rules\/nextjs&quot;,&quot;method&quot;:&quot;GET&quot;,&quot;children&quot;:[],&quot;scripts&quot;:[],&quot;assets&quot;:[],&quot;errors&quot;:[],&quot;locale&quot;:&quot;en&quot;},&quot;checksum&quot;:&quot;ec2b1a94c7605d89ffff6f1f1095cf21907e26c3908b8fc138d5fc08fc4f185a&quot;}" wire:effects="[]" wire:id="d8WPOguFQXqrkjQdTXBH">
+    <ui-modal  data-flux-modal>
+    
+    <dialog
+        wire:ignore.self 
+        class="p-6 [:where(&amp;)]:max-w-xl shadow-lg rounded-xl bg-white dark:bg-zinc-800 border border-transparent dark:border-zinc-700 md:w-100"
+         data-modal="please-join"                 x-data
+                    x-on:modal-show.document="
+                if ($event.detail.name === 'please-join' && ($event.detail.scope === 'd8WPOguFQXqrkjQdTXBH')) $el.showModal();
+                if ($event.detail.name === 'please-join' && (! $event.detail.scope)) $el.showModal();
+            "
+            x-on:modal-close.document="
+                if ($event.detail.name === 'please-join' && ($event.detail.scope === 'd8WPOguFQXqrkjQdTXBH')) $el.close();
+                if (! $event.detail.name || ($event.detail.name === 'please-join' && (! $event.detail.scope))) $el.close();
+            "
+            >
+        <div class="space-y-6">
+            <div class="text-center">
+                <div class="font-medium [:where(&amp;)]:text-zinc-800 [:where(&amp;)]:dark:text-white text-2xl [&amp;:has(+[data-flux-subheading])]:mb-2 [[data-flux-subheading]+&amp;]:mt-2" data-flux-heading>Want to 10x your AI skills?</div>
+                <div class="text-base [:where(&amp;)]:text-zinc-500 [:where(&amp;)]:dark:text-white/70 mt-2" data-flux-text ><p>
+                        Get a free account and learn to code + market your apps using AI (with or without vibes!).
+                    </p></div>            </div>
+
+            <!-- Social Login -->
+            <div>
+                <a href="https://playbooks.com/auth/google/redirect" class="relative items-center font-medium justify-center gap-2 whitespace-nowrap disabled:opacity-75 dark:disabled:opacity-75 disabled:cursor-default disabled:pointer-events-none h-10 text-sm rounded-lg px-4 inline-flex  bg-white hover:bg-zinc-50 dark:bg-zinc-700 dark:hover:bg-zinc-600/75 text-zinc-800 dark:text-white border border-zinc-200 hover:border-zinc-200 border-b-zinc-300/80 dark:border-zinc-600 dark:hover:border-zinc-600 shadow-xs [[data-flux-button-group]_&amp;]:border-s-0 [:is([data-flux-button-group]&gt;&amp;:first-child,_[data-flux-button-group]_:first-child&gt;&amp;)]:border-s-[1px]  !font-normal w-full" data-flux-button="data-flux-button" data-flux-group-target="data-flux-group-target" tabindex="-1">
+        <svg class="w-5 h-5 mr-2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)">
+        <path fill="#4285F4" d="M -3.264 51.509 C -3.264 50.719 -3.334 49.969 -3.454 49.239 L -14.754 49.239 L -14.754 53.749 L -8.284 53.749 C -8.574 55.229 -9.424 56.479 -10.684 57.329 L -10.684 60.329 L -6.824 60.329 C -4.564 58.239 -3.264 55.159 -3.264 51.509 Z"/>
+        <path fill="#34A853" d="M -14.754 63.239 C -11.514 63.239 -8.804 62.159 -6.824 60.329 L -10.684 57.329 C -11.764 58.049 -13.134 58.489 -14.754 58.489 C -17.884 58.489 -20.534 56.379 -21.484 53.529 L -25.464 53.529 L -25.464 56.619 C -23.494 60.539 -19.444 63.239 -14.754 63.239 Z"/>
+        <path fill="#FBBC05" d="M -21.484 53.529 C -21.734 52.809 -21.864 52.039 -21.864 51.239 C -21.864 50.439 -21.724 49.669 -21.484 48.949 L -21.484 45.859 L -25.464 45.859 C -26.284 47.479 -26.754 49.299 -26.754 51.239 C -26.754 53.179 -26.284 54.999 -25.464 56.619 L -21.484 53.529 Z"/>
+        <path fill="#EA4335" d="M -14.754 43.989 C -12.984 43.989 -11.404 44.599 -10.154 45.789 L -6.734 42.369 C -8.804 40.429 -11.514 39.239 -14.754 39.239 C -19.444 39.239 -23.494 41.939 -25.464 45.859 L -21.484 48.949 C -20.534 46.099 -17.884 43.989 -14.754 43.989 Z"/>
+    </g>
+</svg>
+                    Continue with Google
+    </a>
+
+                <a href="https://playbooks.com/auth/github/redirect" class="relative items-center font-medium justify-center gap-2 whitespace-nowrap disabled:opacity-75 dark:disabled:opacity-75 disabled:cursor-default disabled:pointer-events-none h-10 text-sm rounded-lg px-4 inline-flex  bg-white hover:bg-zinc-50 dark:bg-zinc-700 dark:hover:bg-zinc-600/75 text-zinc-800 dark:text-white border border-zinc-200 hover:border-zinc-200 border-b-zinc-300/80 dark:border-zinc-600 dark:hover:border-zinc-600 shadow-xs [[data-flux-button-group]_&amp;]:border-s-0 [:is([data-flux-button-group]&gt;&amp;:first-child,_[data-flux-button-group]_:first-child&gt;&amp;)]:border-s-[1px]  !font-normal w-full mt-3" data-flux-button="data-flux-button" data-flux-group-target="data-flux-group-target" tabindex="-1">
+        <svg class="w-5 h-5 mr-2" aria-hidden="true" fill="currentColor" viewBox="0 0 24 24">
+    <path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"></path>
+</svg>
+                    Continue with GitHub
+    </a>
+            </div>
+
+            <div class="flex justify-end mt-4">
+                <div class="[:where(&amp;)]:text-sm [:where(&amp;)]:text-zinc-400 [:where(&amp;)]:dark:text-white/50 cursor-pointer hover:underline" wire:click="close" data-flux-text >Nah, maybe later</div>            </div>
+        </div>
+
+            </dialog>
+</ui-modal>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if user is logged in
+            const isLoggedIn = false;
+
+            // Don't show modal for logged in users
+            if (isLoggedIn) {
+                return;
+            }
+
+            // Check if the modal has been shown within the last 30 days
+            const checkModalShown = () => {
+                const lastShown = localStorage.getItem('join_modal_last_shown');
+                if (!lastShown) return false;
+
+                const lastShownDate = new Date(parseInt(lastShown));
+                const now = new Date();
+                const daysDiff = Math.floor((now - lastShownDate) / (1000 * 60 * 60 * 24));
+
+                return daysDiff < 30;
+            };
+
+            // Save the current timestamp when modal is shown
+            const saveModalShown = () => {
+                localStorage.setItem('join_modal_last_shown', Date.now().toString());
+            };
+
+            let shown = checkModalShown();
+
+            document.addEventListener('mouseleave', function(event) {
+                if (!shown && event.clientY <= 0) {
+                    Flux.modal('please-join').show();
+                    shown = true;
+                    saveModalShown();
+
+                    // Remove focus from any element after modal opens
+                    setTimeout(() => {
+                        if (document.activeElement) {
+                            document.activeElement.blur();
+                        }
+                    }, 100);
+                }
+            });
+
+            // Listen for modal open event and remove focus
+            document.addEventListener('modal-opened', function(e) {
+                if (e.detail && e.detail.name === 'please-join') {
+                    saveModalShown();
+                    setTimeout(() => {
+                        if (document.activeElement) {
+                            document.activeElement.blur();
+                        }
+                    }, 100);
+                }
+            });
+        });
+    </script>
+</div>            </div>
+        <div x-persist="auth">
+
+    </div>
+        <script src="/flux/flux.min.js?id=eaaf4477" data-navigate-once></script>
+        <div x-persist="youtube-toast">
+        <link rel="modulepreload" href="https://playbooks.com/build/assets/youtubeToast-DXyrN5f1.js" /><script type="module" src="https://playbooks.com/build/assets/youtubeToast-DXyrN5f1.js" data-navigate-track="reload"></script>    </div>
+</body>
+<script>
+    document.addEventListener('livewire:navigating', (e) => {
+        requestAnimationFrame(() => {
+            document.body.classList.add('was-navigated');
+        });
+    });
+</script>
+<div x-persist="toast">
+    <ui-toast x-data x-on:toast-show.document="$el.showToast($event.detail)" wire:ignore>
+    <template>
+        <div popover="manual" class="m-0 p-6 bg-transparent [&amp;[data-position*=top]]:mb-auto [&amp;[data-position*=bottom]]:mt-auto [&amp;[data-position*=right]]:ml-auto rtl:[&amp;[data-position*=right]]:ml-0 rtl:[&amp;[data-position*=right]]:mr-auto [&amp;[data-position*=left]]:mr-auto rtl:[&amp;[data-position*=left]]:mr-0 rtl:[&amp;[data-position*=left]]:ml-auto" data-position="bottom right" data-variant="" data-flux-toast-dialog>
+            <div class="max-w-sm p-2 rounded-xl shadow-lg bg-white border border-zinc-200 border-b-zinc-300/80 dark:bg-zinc-700 dark:border-zinc-600">
+                <div class="flex items-start gap-4">
+                    <div class="flex-1 py-1.5 ps-2.5 flex gap-2">
+                        
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="hidden [[data-flux-toast-dialog][data-variant=success]_&]:block shrink-0 mt-0.5 size-4 text-lime-600 dark:text-lime-400">
+                            <path fill-rule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14Zm3.844-8.791a.75.75 0 0 0-1.188-.918l-3.7 4.79-1.649-1.833a.75.75 0 1 0-1.114 1.004l2.25 2.5a.75.75 0 0 0 1.15-.043l4.25-5.5Z" clip-rule="evenodd" />
+                        </svg>
+
+                        
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="hidden [[data-flux-toast-dialog][data-variant=warning]_&]:block shrink-0 mt-0.5 size-4 text-amber-500 dark:text-amber-400">
+                            <path fill-rule="evenodd" d="M6.701 2.25c.577-1 2.02-1 2.598 0l5.196 9a1.5 1.5 0 0 1-1.299 2.25H2.804a1.5 1.5 0 0 1-1.3-2.25l5.197-9ZM8 4a.75.75 0 0 1 .75.75v3a.75.75 0 1 1-1.5 0v-3A.75.75 0 0 1 8 4Zm0 8a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clip-rule="evenodd" />
+                        </svg>
+
+                        
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="hidden [[data-flux-toast-dialog][data-variant=danger]_&]:block shrink-0 mt-0.5 size-4 text-rose-500 dark:text-rose-400">
+                            <path fill-rule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14ZM8 4a.75.75 0 0 1 .75.75v3a.75.75 0 0 1-1.5 0v-3A.75.75 0 0 1 8 4Zm0 8a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clip-rule="evenodd" />
+                        </svg>
+
+                        <div>
+                            
+                            <div class="font-medium text-sm text-zinc-800 dark:text-white [&:not(:empty)+div]:font-normal [&:not(:empty)+div]:text-zinc-500 [&:not(:empty)+div]:dark:text-zinc-300 [&:not(:empty)]:pb-2"><slot name="heading"></slot></div>
+
+                            
+                            <div class="font-medium text-sm text-zinc-800 dark:text-white"><slot name="text"></slot></div>
+                        </div>
+                    </div>
+
+                    
+                    <div class="flex items-center">
+                        <button type="button" onclick="this.closest('ui-toast').hideToast()" class="inline-flex items-center font-medium justify-center gap-2 truncate disabled:opacity-50 dark:disabled:opacity-75 disabled:cursor-default h-8 text-sm rounded-md w-8 bg-transparent hover:bg-zinc-800/5 dark:hover:bg-white/15 text-zinc-400 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-white" as="button">
+                            <div>
+                                <svg class="[:where(&)]:size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" data-slot="icon">
+                                    <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"></path>
+                                </svg>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+</ui-toast>
+</div>
+
+</html>

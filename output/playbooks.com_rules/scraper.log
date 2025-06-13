@@ -1,0 +1,115 @@
+2025-06-12 10:11:36,251 [0] - INFO - Starting crawl from https://playbooks.com/rules
+2025-06-12 10:11:36,251 [0] - INFO - Starting crawl with 3 threads
+2025-06-12 10:11:36,252 [1] - INFO - Worker thread ThreadPoolExecutor-0_0 started
+2025-06-12 10:11:36,252 [2] - INFO - Worker thread ThreadPoolExecutor-0_1 started
+2025-06-12 10:11:36,252 [3] - INFO - Worker thread ThreadPoolExecutor-0_2 started
+2025-06-12 10:11:37,285 [1] - INFO - Scraping: /
+2025-06-12 10:11:38,262 [1] - INFO - Scraping: /create-rules
+2025-06-12 10:11:38,754 [0] - INFO - Progress: 5 pages visited, 23 URLs queued, 3 active workers, Proxies: 4/4 working
+2025-06-12 10:11:39,637 [1] - INFO - Scraping: /memory
+2025-06-12 10:11:39,951 [3] - INFO - Scraping: /expressjs
+2025-06-12 10:11:39,975 [2] - INFO - Scraping: /flask
+2025-06-12 10:11:40,752 [1] - INFO - Scraping: /swiftui
+2025-06-12 10:11:40,763 [0] - INFO - Progress: 8 pages visited, 33 URLs queued, 3 active workers, Proxies: 4/4 working
+2025-06-12 10:11:41,892 [3] - INFO - Scraping: /react
+2025-06-12 10:11:41,906 [2] - INFO - Scraping: /ruby-on-rails
+2025-06-12 10:11:42,644 [1] - INFO - Scraping: /jinja
+2025-06-12 10:11:42,770 [0] - INFO - Progress: 12 pages visited, 44 URLs queued, 3 active workers, Proxies: 4/4 working
+2025-06-12 10:11:44,024 [2] - INFO - Scraping: /nextjs
+2025-06-12 10:11:44,043 [3] - INFO - Scraping: /fastapi
+2025-06-12 10:11:44,044 [1] - INFO - Scraping: /sveltekit
+2025-06-12 10:11:44,770 [0] - INFO - Progress: 15 pages visited, 47 URLs queued, 3 active workers, Proxies: 4/4 working
+2025-06-12 10:11:45,005 [2] - INFO - Scraping: /task-lists
+2025-06-12 10:11:46,376 [3] - INFO - Scraping: /rule-analytics
+2025-06-12 10:11:46,393 [2] - INFO - Scraping: /django
+2025-06-12 10:11:46,478 [1] - INFO - Scraping: /postgresql
+2025-06-12 10:11:46,771 [0] - INFO - Progress: 19 pages visited, 57 URLs queued, 3 active workers, Proxies: 4/4 working
+2025-06-12 10:11:46,957 [3] - INFO - Scraping: /builder
+2025-06-12 10:11:47,760 [3] - WARNING - Proxy error for https://playbooks.com/rules/laravel via 40.76.69.94: HTTPSConnectionPool(host='playbooks.com', port=443): Max retries exceeded with url: /rules/laravel (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+2025-06-12 10:11:47,761 [3] - INFO - Proxy marked as failed: 40.76.69.94 (1/4 failed)
+2025-06-12 10:11:47,768 [2] - WARNING - Proxy error for https://playbooks.com/rules/vitest-testing via 40.76.69.94: HTTPSConnectionPool(host='playbooks.com', port=443): Max retries exceeded with url: /rules/vitest-testing (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+2025-06-12 10:11:47,770 [1] - WARNING - Proxy error for https://playbooks.com/rules/mysql via 40.76.69.94: HTTPSConnectionPool(host='playbooks.com', port=443): Max retries exceeded with url: /rules/mysql (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+2025-06-12 10:11:48,772 [0] - INFO - Progress: 20 pages visited, 56 URLs queued, 3 active workers, Proxies: 3/4 working
+2025-06-12 10:11:49,887 [2] - INFO - Scraping: /vitest-testing
+2025-06-12 10:11:50,772 [0] - INFO - Progress: 21 pages visited, 55 URLs queued, 3 active workers, Proxies: 3/4 working
+2025-06-12 10:11:50,785 [2] - INFO - Scraping: /sqlite
+2025-06-12 10:11:51,420 [3] - INFO - Scraping: /laravel
+2025-06-12 10:11:51,786 [3] - INFO - Scraping: /flutter
+2025-06-12 10:11:52,773 [0] - INFO - Progress: 24 pages visited, 57 URLs queued, 3 active workers, Proxies: 3/4 working
+2025-06-12 10:11:52,784 [3] - INFO - Scraping: /tailwind
+2025-06-12 10:11:53,256 [1] - INFO - Scraping: /mysql
+2025-06-12 10:11:53,788 [3] - INFO - Scraping: /vuejs
+2025-06-12 10:11:54,774 [0] - INFO - Progress: 27 pages visited, 56 URLs queued, 3 active workers, Proxies: 3/4 working
+2025-06-12 10:11:54,787 [3] - INFO - Scraping: /add/create-rules
+2025-06-12 10:11:55,788 [3] - INFO - Scraping: /suggest/create-rules
+2025-06-12 10:11:56,775 [0] - INFO - Progress: 29 pages visited, 54 URLs queued, 3 active workers, Proxies: 3/4 working
+2025-06-12 10:11:56,786 [3] - INFO - Scraping: /suggest/memory
+2025-06-12 10:11:57,787 [3] - INFO - Scraping: /add/memory
+2025-06-12 10:11:58,775 [0] - INFO - Progress: 31 pages visited, 52 URLs queued, 3 active workers, Proxies: 3/4 working
+2025-06-12 10:11:58,935 [3] - INFO - Scraping: /add/expressjs
+2025-06-12 10:11:59,786 [3] - INFO - Scraping: /suggest/expressjs
+2025-06-12 10:12:00,687 [3] - INFO - Scraping: /add/flask
+2025-06-12 10:12:00,776 [0] - INFO - Progress: 34 pages visited, 45 URLs queued, 3 active workers, Proxies: 3/4 working
+2025-06-12 10:12:01,585 [3] - INFO - Scraping: /suggest/flask
+2025-06-12 10:12:02,325 [3] - INFO - Scraping: /suggest/swiftui
+2025-06-12 10:12:02,776 [0] - INFO - Progress: 36 pages visited, 40 URLs queued, 3 active workers, Proxies: 3/4 working
+2025-06-12 10:12:02,885 [3] - INFO - Scraping: /add/swiftui
+2025-06-12 10:12:03,475 [3] - INFO - Scraping: /add/react
+2025-06-12 10:12:04,008 [3] - INFO - Scraping: /suggest/react
+2025-06-12 10:12:04,777 [0] - INFO - Progress: 39 pages visited, 35 URLs queued, 3 active workers, Proxies: 3/4 working
+2025-06-12 10:12:04,987 [3] - INFO - Scraping: /hotwire
+2025-06-12 10:12:05,016 [3] - INFO - Scraping: /add/ruby-on-rails
+2025-06-12 10:12:05,570 [3] - INFO - Scraping: /suggest/ruby-on-rails
+2025-06-12 10:12:05,749 [3] - INFO - Scraping: /erb
+2025-06-12 10:12:06,064 [3] - INFO - Scraping: /suggest/jinja
+2025-06-12 10:12:06,345 [3] - INFO - Scraping: /add/jinja
+2025-06-12 10:12:06,613 [3] - INFO - Scraping: /add/nextjs
+2025-06-12 10:12:06,775 [2] - WARNING - Proxy error for https://playbooks.com/rules/react-native via 34.216.237.152: HTTPSConnectionPool(host='playbooks.com', port=443): Read timed out. (read timeout=15)
+2025-06-12 10:12:06,775 [2] - INFO - Proxy marked as failed: 34.216.237.152 (2/4 failed)
+2025-06-12 10:12:06,777 [0] - INFO - Progress: 46 pages visited, 25 URLs queued, 3 active workers, Proxies: 2/4 working
+2025-06-12 10:12:07,172 [3] - WARNING - Proxy error for https://playbooks.com/rules/suggest/nextjs via 83.168.74.163: ('Connection aborted.', BadStatusLine('<html>\r\n'))
+2025-06-12 10:12:07,172 [3] - INFO - Proxy marked as failed: 83.168.74.163 (3/4 failed)
+2025-06-12 10:12:08,141 [2] - WARNING - Proxy error for https://playbooks.com/rules/react-native via 79.110.200.27: ('Connection aborted.', BadStatusLine('<html>\r\n'))
+2025-06-12 10:12:08,142 [2] - INFO - Proxy marked as failed: 79.110.200.27 (4/4 failed)
+2025-06-12 10:12:08,173 [3] - WARNING - All 4 proxies have failed, switching to direct connection
+2025-06-12 10:12:08,768 [1] - WARNING - Proxy error for https://playbooks.com/rules/create via 34.216.237.152: HTTPSConnectionPool(host='playbooks.com', port=443): Read timed out. (read timeout=15)
+2025-06-12 10:12:08,931 [3] - INFO - Scraping: /suggest/nextjs
+2025-06-12 10:12:09,454 [3] - INFO - Scraping: /suggest/fastapi
+2025-06-12 10:12:09,923 [3] - INFO - Scraping: /add/fastapi
+2025-06-12 10:12:10,439 [3] - INFO - Scraping: /add/sveltekit
+2025-06-12 10:12:10,454 [1] - INFO - Scraping: /create
+2025-06-12 10:12:10,778 [0] - INFO - Progress: 51 pages visited, 20 URLs queued, 3 active workers, Proxies: 0/4 working
+2025-06-12 10:12:10,980 [3] - INFO - Scraping: /suggest/sveltekit
+2025-06-12 10:12:11,414 [2] - INFO - Scraping: /react-native
+2025-06-12 10:12:11,499 [3] - INFO - Scraping: /suggest/task-lists
+2025-06-12 10:12:11,508 [1] - INFO - Scraping: /add/task-lists
+2025-06-12 10:12:11,916 [2] - INFO - Scraping: /suggest/rule-analytics
+2025-06-12 10:12:12,043 [1] - INFO - Scraping: /add/django
+2025-06-12 10:12:12,154 [3] - INFO - Scraping: /add/rule-analytics
+2025-06-12 10:12:12,560 [1] - INFO - Scraping: /suggest/django
+2025-06-12 10:12:12,778 [0] - INFO - Progress: 59 pages visited, 13 URLs queued, 3 active workers, Proxies: 0/4 working
+2025-06-12 10:12:13,078 [2] - INFO - Scraping: /django-dtl
+2025-06-12 10:12:13,527 [3] - INFO - Scraping: /supabase-edge-functions
+2025-06-12 10:12:13,527 [2] - INFO - Scraping: /add/postgresql
+2025-06-12 10:12:13,819 [1] - INFO - Scraping: /supabase-rls-policy
+2025-06-12 10:12:14,377 [1] - INFO - Scraping: /suggest/postgresql
+2025-06-12 10:12:14,779 [0] - INFO - Progress: 64 pages visited, 8 URLs queued, 3 active workers, Proxies: 0/4 working
+2025-06-12 10:12:14,955 [3] - INFO - Scraping: /postgres-database-functions
+2025-06-12 10:12:15,080 [2] - INFO - Scraping: /supabase-migrations
+2025-06-12 10:12:15,468 [3] - INFO - Scraping: /add/laravel
+2025-06-12 10:12:15,548 [2] - INFO - Scraping: /suggest/laravel
+2025-06-12 10:12:15,722 [1] - INFO - Scraping: /laravel-vilt
+2025-06-12 10:12:16,057 [2] - INFO - Scraping: /add/mysql
+2025-06-12 10:12:16,201 [1] - INFO - Scraping: /suggest/mysql
+2025-06-12 10:12:16,437 [3] - INFO - Scraping: /laravel-tall
+2025-06-12 10:12:16,557 [2] - INFO - Scraping: /suggest/react-native
+2025-06-12 10:12:16,651 [1] - INFO - Scraping: /add/react-native
+2025-06-12 10:12:16,780 [0] - INFO - Progress: 71 pages visited, 0 URLs queued, 3 active workers, Proxies: 0/4 working
+2025-06-12 10:12:18,355 [3] - INFO - Worker thread ThreadPoolExecutor-0_2 finished with 39 pages
+2025-06-12 10:12:18,467 [2] - INFO - Worker thread ThreadPoolExecutor-0_1 finished with 15 pages
+2025-06-12 10:12:18,562 [1] - INFO - Worker thread ThreadPoolExecutor-0_0 finished with 17 pages
+2025-06-12 10:12:18,781 [0] - INFO - All worker threads have completed
+2025-06-12 10:12:18,781 [0] - INFO - Collected 17 pages from thread 0
+2025-06-12 10:12:18,781 [0] - INFO - Collected 15 pages from thread 1
+2025-06-12 10:12:18,782 [0] - INFO - Collected 39 pages from thread 2
+2025-06-12 10:12:18,787 [0] - INFO - Data saved to scraped_data_20250612_101218.json

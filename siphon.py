@@ -63,7 +63,9 @@ def signal_handler(sig, frame):
         except:
             pass
     print("Shutdown complete.")
-    sys.exit(0)
+    # Force exit if hanging
+    import os
+    os._exit(0)
 
 # Register the signal handler
 signal.signal(signal.SIGINT, signal_handler)
@@ -404,7 +406,8 @@ class ProxyManager:
         """Get a working proxy for the given thread and URL"""
         with self.proxy_lock:
             if not self.proxies:
-                if not self.all_failed_warned:
+                # Only show warning if we actually had proxies configured initially
+                if not self.all_failed_warned and self.original_proxy_count > 0:
                     print(f"WARNING: All {self.original_proxy_count} proxies have failed, switching to direct connection")
                     self.all_failed_warned = True
                 return None
@@ -445,7 +448,7 @@ class ProxyManager:
                 remaining = len(self.proxies)
                 print(f"Proxy failed, {remaining} remaining out of {self.original_proxy_count}")
                 
-                if remaining == 0 and not self.all_failed_warned:
+                if remaining == 0 and not self.all_failed_warned and self.original_proxy_count > 0:
                     print(f"WARNING: All {self.original_proxy_count} proxies have failed, switching to direct connection")
                     self.all_failed_warned = True
 
@@ -1870,6 +1873,7 @@ class Siphon:
         self.timeout = timeout
         self.user_agent = user_agent or random.choice(USER_AGENTS) # Use global USER_AGENTS
         self.verify_ssl = verify_ssl
+        self.headers = headers or {}
         self.request_headers = headers or {}
         self.request_cookies = cookies or {}
         self.auth = auth
@@ -1913,13 +1917,11 @@ class Siphon:
             logging.info("Proxies detected - disabling SSL verification to avoid certificate chain issues")
             self.verify_ssl = False
             
-        if test_proxies_on_start and self.proxy_manager.proxies:
-            logging.info("Testing proxies on startup...")
-            self.proxy_manager.test_proxies(max_workers=min(10, len(self.proxy_manager.proxies) or 1))
-            if self.proxy_manager.proxies:
-                 logging.info(f"Siphon using {len(self.proxy_manager.proxies)} working proxies out of {self.proxy_manager.original_proxy_count} total.")
-            else:
-                logging.warning("No working proxies found after testing.")
+        # Don't test proxies upfront - they'll be tested on-demand in get_proxy()
+        if self.proxy_manager.proxies:
+            logging.info(f"Loaded {len(self.proxy_manager.proxies)} proxies (will test on-demand)")
+        else:
+            logging.info("No proxies loaded, using direct connection")
 
         self.rate_limiter = RateLimiter(initial_delay=self.delay if self.delay > 0 else 0.25)
         self.cache = {}
@@ -2312,11 +2314,19 @@ class Siphon:
                     except Exception as e_proxy:
                         logging.warning(f"Failed to get proxy for {url}: {e_proxy}")
 
+                # Set headers including user agent
+                headers = {
+                    'User-Agent': self.user_agent
+                }
+                if self.headers:
+                    headers.update(self.headers)
+                
                 response = self.session.get(
                     url,
                     timeout=(self.timeout, self.timeout),  # (connect_timeout, read_timeout)
                     verify=self.verify_ssl,
-                    proxies=proxy_to_use
+                    proxies=proxy_to_use,
+                    headers=headers
                 )
                 response.raise_for_status()
                 # Use RobustResponse for better encoding detection

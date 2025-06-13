@@ -2070,16 +2070,22 @@ class Siphon:
             return
             
         self.visited_urls.add(url)
-        logging.info(f"Crawling: {url} (depth: {depth})")
+        
+        # Show progress with URL count
+        url_count = len(self.visited_urls)
+        print(f"🔍 [{url_count:3d}] Scanning: {url}")
         
         try:
             # Try static scraping first
             static_links = set()
             if self.dynamic_mode != "always":
+                print(f"    📄 Static analysis...")
                 html_content = self.fetch_url(url)
                 if html_content:
                     soup = self.parse_html(html_content)
                     static_links = self.extract_links(soup, url)
+                    if static_links:
+                        print(f"    ✓ Found {len(static_links)} links via static scraping")
             
             # Determine if we should use dynamic scraping
             use_dynamic = self.should_use_dynamic_scraping(url, static_links)
@@ -2087,16 +2093,23 @@ class Siphon:
             # Use dynamic scraping if needed
             dynamic_links = []
             if use_dynamic:
-                logging.info(f"Using dynamic scraping for: {url}")
+                print(f"    🌐 Switching to dynamic mode (JavaScript rendering)...")
                 dynamic_links = self.dynamic_scrape(url)
+                if dynamic_links:
+                    print(f"    ✓ Found {len(dynamic_links)} links via dynamic scraping")
                 
             # Combine links from both methods
             links = list(static_links.union(dynamic_links))
             
+            # Show download candidates
+            download_candidates = [link for link in links if self.should_download_file(link)]
+            if download_candidates:
+                print(f"    📥 Found {len(download_candidates)} potential downloads")
+            
             # Process the links
             for link in links:
                 if shutdown_flag.is_set():
-                    logging.info("Shutdown signal detected, stopping crawl.")
+                    print("⚠️  Shutdown signal detected, stopping crawl.")
                     break # Exit the loop over links
                 if self.delay > 0:
                     time.sleep(self.delay)
@@ -2107,6 +2120,7 @@ class Siphon:
                     self.crawl(link, depth + 1)
                     
         except Exception as e:
+            print(f"    ❌ Error: {str(e)}")
             logging.error(f"Error crawling {url}: {str(e)}")
             
     def __enter__(self):
@@ -2262,6 +2276,7 @@ class Siphon:
                 with open(file_path, 'wb') as f:
                     f.write(content)
                 
+                print(f"    💾 Downloaded: {safe_filename}")
                 logging.info(f"SUCCESS: Saved blob content to {file_path}")
                 self.downloaded_files.add(url) # Use blob URI as the unique identifier
                 self.discovered_files.add(url)
@@ -2282,6 +2297,7 @@ class Siphon:
 
                 shutil.move(source_path, dest_path)
                 
+                print(f"    💾 Downloaded: {safe_filename}")
                 logging.info(f"SUCCESS: Moved captured download to {dest_path}")
                 self.downloaded_files.add(url)
                 self.discovered_files.add(url)
@@ -2358,6 +2374,7 @@ class Siphon:
                     if chunk: 
                         f.write(chunk)
             
+            print(f"    💾 Downloaded: {filename}")
             self.downloaded_files.add(url)
             self.discovered_files.add(url) 
             logging.info(f"Successfully downloaded: {filepath} (from {url})")
@@ -2517,10 +2534,15 @@ def main():
         
         # Print summary
         if not args.quiet:
-            print("\nCrawl Summary:")
-            print(f"URLs visited: {len(siphon_instance.visited_urls)}")
-            print(f"Files discovered: {len(siphon_instance.discovered_files)}")
-            print(f"Files downloaded: {len(siphon_instance.downloaded_files)}")
+            print("\n" + "="*60)
+            print("🎯 CRAWL SUMMARY")
+            print("="*60)
+            print(f"📊 URLs visited: {len(siphon_instance.visited_urls)}")
+            print(f"🔍 Files discovered: {len(siphon_instance.discovered_files)}")
+            print(f"💾 Files downloaded: {len(siphon_instance.downloaded_files)}")
+            if siphon_instance.downloaded_files:
+                print(f"📁 Output directory: {siphon_instance.output_dir}")
+            print("="*60)
             
     except KeyboardInterrupt:
         logging.warning("Crawl interrupted by user")

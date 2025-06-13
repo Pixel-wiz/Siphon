@@ -27,6 +27,7 @@ import tempfile
 import pathlib
 import base64
 import shutil
+import queue
 
 # New imports for dynamic scraping
 try:
@@ -47,19 +48,26 @@ def print_logo():
 
 warnings.filterwarnings("ignore", category=requests.packages.urllib3.exceptions.InsecureRequestWarning)
 
+# Global variables
 shutdown_flag = threading.Event()
-
-# Global Siphon instance for the signal handler
 siphon_instance = None
 
 def signal_handler(sig, frame):
-    print("\n\n⚠️ Shutdown signal received! Stopping threads and browser...")
+    """Handle Ctrl+C gracefully"""
+    global siphon_instance
+    print("\n\nReceived interrupt signal. Shutting down gracefully...")
     shutdown_flag.set()
     if siphon_instance:
-        # This is crucial for closing the Playwright browser
-        siphon_instance.close()
+        try:
+            siphon_instance.close()
+        except:
+            pass
+    print("Shutdown complete.")
+    sys.exit(0)
 
+# Register the signal handler
 signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 
 USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
@@ -318,14 +326,15 @@ class RobustResponse:
 class ProxyManager:
     
     def __init__(self, proxy_list, test_url='http://httpbin.org/ip'):
-        self.proxies = []
-        self.original_proxy_count = 0
         self.test_url = test_url
-        self.proxy_counters = {}
-        self.proxy_lock = threading.Lock()
+        self.proxies = []
         self.failed_proxies = set()
-        self.use_direct = False
-        self.proxy_attempts = {}
+        self.proxy_lock = threading.Lock()
+        self.thread_assignments = {}
+        self.current_proxy_index = 0
+        self.all_failed_warned = False
+        self.original_proxy_count = 0
+        
         if proxy_list:
             self.load_proxies(proxy_list)
     
@@ -392,78 +401,64 @@ class ProxyManager:
         logging.info(f"Found {len(self.proxies)} working proxies")
     
     def get_proxy(self, thread_id, url=None):
-        
-        if self.use_direct or not self.proxies:
-            return None
-            
+        """Get a working proxy for the given thread and URL"""
         with self.proxy_lock:
-            if self.failed_proxies:
-                active_proxies = [p for p in self.proxies if str(p) not in self.failed_proxies]
-                if not active_proxies:
-                    if len(self.failed_proxies) >= self.original_proxy_count:
-                        logging.warning(f"All {self.original_proxy_count} proxies have failed, switching to direct connection")
-                        self.use_direct = True
-                        return None
-                    else:
-                        active_proxies = self.proxies
-                self.proxies = active_proxies
+            if not self.proxies:
+                if not self.all_failed_warned:
+                    print(f"WARNING: All {self.original_proxy_count} proxies have failed, switching to direct connection")
+                    self.all_failed_warned = True
+                return None
             
-            if thread_id not in self.proxy_counters:
-                self.proxy_counters[thread_id] = {
-                    'proxy_index': 0,
-                    'request_count': 0,
-                    'rotation_threshold': random.randint(1, 5)
-                }
-            
-            counter = self.proxy_counters[thread_id]
-            
+            # Try to get an untried proxy for this URL first
             if url:
-                if url not in self.proxy_attempts:
-                    self.proxy_attempts[url] = set()
-                
-                for i in range(len(self.proxies)):
-                    proxy_str = str(self.proxies[i])
-                    if proxy_str not in self.proxy_attempts[url] and proxy_str not in self.failed_proxies:
-                        self.proxy_attempts[url].add(proxy_str)
-                        return self.proxies[i]
+                untried_proxy = self.get_untried_proxy_for_url(url)
+                if untried_proxy:
+                    self.thread_assignments[thread_id] = untried_proxy
+                    return untried_proxy
             
-            counter['request_count'] += 1
+            # Round-robin assignment if no specific URL or no untried proxy
+            if thread_id not in self.thread_assignments or self.thread_assignments[thread_id] not in self.proxies:
+                if self.proxies:
+                    # Assign next available proxy
+                    self.current_proxy_index = (self.current_proxy_index) % len(self.proxies)
+                    assigned_proxy = self.proxies[self.current_proxy_index]
+                    self.thread_assignments[thread_id] = assigned_proxy
+                    self.current_proxy_index += 1
+                    return assigned_proxy
+                else:
+                    return None
             
-            if counter['request_count'] >= counter['rotation_threshold']:
-                counter['proxy_index'] = (counter['proxy_index'] + 1) % len(self.proxies)
-                counter['request_count'] = 0
-                counter['rotation_threshold'] = random.randint(1, 5)
-            
-            if counter['proxy_index'] >= len(self.proxies):
-                counter['proxy_index'] = 0
-            
-            return self.proxies[counter['proxy_index']]
-    
+            return self.thread_assignments[thread_id]
+
     def mark_proxy_failed(self, proxy):
-        
+        """Mark a proxy as failed and remove it from the active list"""
         with self.proxy_lock:
-            proxy_str = str(proxy)
-            if proxy_str not in self.failed_proxies:
-                self.failed_proxies.add(proxy_str)
-                logging.info(f"Proxy marked as failed: {proxy.get('http', '').replace('http://', '').split(':')[0]} ({len(self.failed_proxies)}/{self.original_proxy_count} failed)")
-    
+            if proxy in self.proxies:
+                self.proxies.remove(proxy)
+                self.failed_proxies.add(proxy)
+                
+                # Clean up thread assignments using this proxy
+                threads_to_reassign = [tid for tid, p in self.thread_assignments.items() if p == proxy]
+                for tid in threads_to_reassign:
+                    del self.thread_assignments[tid]
+                
+                remaining = len(self.proxies)
+                print(f"Proxy failed, {remaining} remaining out of {self.original_proxy_count}")
+                
+                if remaining == 0 and not self.all_failed_warned:
+                    print(f"WARNING: All {self.original_proxy_count} proxies have failed, switching to direct connection")
+                    self.all_failed_warned = True
+
     def all_proxies_failed(self):
-        
-        with self.proxy_lock:
-            return len(self.failed_proxies) >= self.original_proxy_count
+        """Check if all proxies have failed"""
+        return len(self.proxies) == 0
     
     def get_untried_proxy_for_url(self, url):
-        
+        """Get an untried proxy for a specific URL"""
         with self.proxy_lock:
-            if url not in self.proxy_attempts:
-                self.proxy_attempts[url] = set()
-            
-            for proxy in self.proxies:
-                proxy_str = str(proxy)
-                if proxy_str not in self.proxy_attempts[url] and proxy_str not in self.failed_proxies:
-                    self.proxy_attempts[url].add(proxy_str)
-                    return proxy
-            
+            # Simple round-robin for now - more sophisticated logic can be added later
+            if self.proxies:
+                return self.proxies[self.current_proxy_index % len(self.proxies)]
             return None
 
 class RateLimiter:
@@ -1478,7 +1473,8 @@ class DynamicScraper:
 
         discovered_downloads = []
         keywords = keywords or ['download', 'save', 'export', 'get', 'fetch']
-        download_extensions = download_extensions or ['md', 'mdc', 'pdf', 'doc', 'docx', 'txt']
+        # Only use provided extensions, don't fall back to defaults
+        download_extensions = download_extensions or []
         
         logging.info(f"Starting download detection with extensions: {download_extensions}")
         
@@ -1859,7 +1855,7 @@ class Siphon:
                  proxy=None, # proxy here is a single string or dict, ProxyManager expects a list
                  crawl_only=False, download_extensions=None, exclude_extensions=None,
                  exclude_urls=None, include_urls=None, custom_parser=None,
-                 dynamic_mode="auto", test_proxies_on_start=False): # Added test_proxies_on_start
+                 dynamic_mode="auto", test_proxies_on_start=False, max_threads=3, verbose=False): # Added test_proxies_on_start, max_threads, and verbose
 
         self.base_url = base_url
         if not base_url:
@@ -1911,6 +1907,12 @@ class Siphon:
             proxy_list_arg = [p.strip() for p in proxy if p.strip()]
 
         self.proxy_manager = ProxyManager(proxy_list_arg)
+        
+        # Automatically disable SSL verification when using proxies to avoid certificate issues
+        if self.proxy_manager.proxies and self.verify_ssl:
+            logging.info("Proxies detected - disabling SSL verification to avoid certificate chain issues")
+            self.verify_ssl = False
+            
         if test_proxies_on_start and self.proxy_manager.proxies:
             logging.info("Testing proxies on startup...")
             self.proxy_manager.test_proxies(max_workers=min(10, len(self.proxy_manager.proxies) or 1))
@@ -1922,7 +1924,12 @@ class Siphon:
         self.rate_limiter = RateLimiter(initial_delay=self.delay if self.delay > 0 else 0.25)
         self.cache = {}
 
-        self.thread_counter = 0 # For assigning IDs if Siphon were multi-threaded internally
+        # Threading attributes
+        self.max_threads = max_threads
+        self.url_queue = queue.Queue()
+        self.queue_lock = threading.Lock()
+        self.visited_lock = threading.Lock()
+        self.thread_counter = 0 # For assigning sequential thread IDs
         self.thread_ids = {}
         self.thread_id_lock = threading.Lock()
 
@@ -1945,6 +1952,7 @@ class Siphon:
         # Dynamic scraping settings
         self.dynamic_mode = dynamic_mode
         self.dynamic_scraper = None
+        self.verbose = verbose
         
         # Don't initialize dynamic scraper immediately to avoid hanging
         # It will be initialized when first needed
@@ -2045,84 +2053,152 @@ class Siphon:
     
     def crawl(self, url=None, depth=0):
         """
-        Crawl a URL and its links up to max_depth.
+        Crawl a URL and its links up to max_depth using multiple threads.
         
         Parameters:
         -----------
         url : str
             The URL to crawl.
         depth : int
-            The current depth of crawling.
+            The current depth of crawling (ignored in threaded version).
         """
         if url is None:
             url = self.base_url
             
-        if url in self.visited_urls:
-            return
-            
-        if self.max_urls is not None and len(self.visited_urls) >= self.max_urls:
-            return
-            
-        if depth > self.max_depth:
-            return
-            
-        if not self.should_crawl_url(url):
-            return
-            
-        self.visited_urls.add(url)
+        # Initialize the queue with the starting URL
+        self.url_queue.put((url, 0))
         
-        # Show progress with URL count
-        url_count = len(self.visited_urls)
-        print(f"🔍 [{url_count:3d}] Scanning: {url}")
+        # Start worker threads
+        with ThreadPoolExecutor(max_workers=self.max_threads) as executor:
+            futures = [executor.submit(self.worker_thread) for _ in range(self.max_threads)]
+            
+            # Wait for all threads to complete
+            for future in as_completed(futures):
+                try:
+                    future.result()
+                except Exception as e:
+                    logging.error(f"Worker thread error: {e}")
+    
+    def worker_thread(self):
+        """Worker thread that processes URLs from the queue."""
+        # Assign sequential thread ID
+        with self.thread_id_lock:
+            current_thread_ident = threading.get_ident()
+            if current_thread_ident not in self.thread_ids:
+                self.thread_counter += 1
+                self.thread_ids[current_thread_ident] = self.thread_counter
+            thread_id = self.thread_ids[current_thread_ident]
         
-        try:
-            # Try static scraping first
-            static_links = set()
-            if self.dynamic_mode != "always":
-                print(f"    📄 Static analysis...")
+        while not shutdown_flag.is_set():
+            try:
+                # Get next URL from queue with timeout
+                url_info = self.url_queue.get(timeout=1.0)
+                url, depth = url_info
+            except queue.Empty:
+                # Check if there are any other threads still working
+                if self.url_queue.empty():
+                    break
+                continue
+            
+            # Check if we got a valid URL
+            if not url_info:
+                try:
+                    self.url_queue.task_done()
+                except ValueError:
+                    pass
+                continue
+            
+            try:
+                # Check if we should process this URL
+                with self.visited_lock:
+                    if url in self.visited_urls:
+                        self.url_queue.task_done()
+                        continue
+                    
+                    if self.max_urls is not None and len(self.visited_urls) >= self.max_urls:
+                        self.url_queue.task_done()
+                        continue
+                        
+                    if depth > self.max_depth:
+                        self.url_queue.task_done()
+                        continue
+                        
+                    if not self.should_crawl_url(url):
+                        self.url_queue.task_done()
+                        continue
+                        
+                    self.visited_urls.add(url)
+                
+                # Only show progress for files that match our criteria or when downloading
+                should_download = self.should_download_file(url)
+                
+                # Show progress for all URLs when verbose
+                if self.verbose or should_download:
+                    print(f"[{thread_id}] Crawling: {url}")
+                
+                # Try static scraping first (always enabled now for better threading)
+                static_links = set()
+                html_content = None
                 html_content = self.fetch_url(url)
                 if html_content:
                     soup = self.parse_html(html_content)
                     static_links = self.extract_links(soup, url)
-                    if static_links:
-                        print(f"    ✓ Found {len(static_links)} links via static scraping")
-            
-            # Determine if we should use dynamic scraping
-            use_dynamic = self.should_use_dynamic_scraping(url, static_links)
-            
-            # Use dynamic scraping if needed
-            dynamic_links = []
-            if use_dynamic:
-                print(f"    🌐 Switching to dynamic mode (JavaScript rendering)...")
-                dynamic_links = self.dynamic_scrape(url)
-                if dynamic_links:
-                    print(f"    ✓ Found {len(dynamic_links)} links via dynamic scraping")
+                    if self.verbose:
+                        print(f"    -> Found {len(static_links)} links")
                 
-            # Combine links from both methods
-            links = list(static_links.union(dynamic_links))
-            
-            # Show download candidates
-            download_candidates = [link for link in links if self.should_download_file(link)]
-            if download_candidates:
-                print(f"    📥 Found {len(download_candidates)} potential downloads")
-            
-            # Process the links
-            for link in links:
-                if shutdown_flag.is_set():
-                    print("⚠️  Shutdown signal detected, stopping crawl.")
-                    break # Exit the loop over links
+                # Use dynamic scraping only when necessary and single-threaded
+                dynamic_links = set()
+                use_dynamic = (self.max_threads == 1 and 
+                              self.should_use_dynamic_scraping(url, static_links))
+                
+                if use_dynamic:
+                    if should_download:
+                        print(f"[{thread_id}] {url} -> Dynamic mode")
+                    dynamic_links = self.dynamic_scrape(url)
+                    
+                # Combine links from both methods
+                links = list(static_links.union(dynamic_links))
+                
+                # Process the links
+                files_downloaded = 0
+                potential_files = []
+                new_crawl_urls = 0
+                
+                for link in links:
+                    if shutdown_flag.is_set():
+                        break
+                        
+                    if self.should_download_file(link):
+                        potential_files.append(link)
+                        if self.verbose:
+                            print(f"    -> Downloading: {link}")
+                        self.download_file(link)
+                        files_downloaded += 1
+                    elif self.should_crawl_url(link) and depth < self.max_depth:
+                        # Add to queue for processing by worker threads
+                        self.url_queue.put((link, depth + 1))
+                        new_crawl_urls += 1
+                
+                # Show summary - only show meaningful progress
+                if files_downloaded > 0:
+                    print(f"    -> Downloaded {files_downloaded} file(s)")
+                elif self.verbose:
+                    if new_crawl_urls > 0:
+                        print(f"    -> Added {new_crawl_urls} URLs to crawl queue")
+                    if len(potential_files) > 0:
+                        print(f"    -> Found {len(potential_files)} potential files but none matched criteria")
+                
                 if self.delay > 0:
                     time.sleep(self.delay)
                     
-                if self.should_download_file(link):
-                    self.download_file(link)
-                elif self.should_crawl_url(link) and depth < self.max_depth:
-                    self.crawl(link, depth + 1)
-                    
-        except Exception as e:
-            print(f"    ❌ Error: {str(e)}")
-            logging.error(f"Error crawling {url}: {str(e)}")
-            
+            except Exception as e:
+                if self.verbose:
+                    print(f"    ERROR: {str(e)}")
+                logging.error(f"Error processing {url}: {str(e)}")
+            finally:
+                # Always call task_done() exactly once per item
+                self.url_queue.task_done()
+    
     def __enter__(self):
         return self
         
@@ -2156,8 +2232,7 @@ class Siphon:
                 if pattern in url:
                     return True
             return False
-        if self.should_download_file(url):
-            return False
+        # Allow crawling of downloadable files - we need to crawl them to download them
         return True
 
     def should_download_file(self, url):
@@ -2168,10 +2243,50 @@ class Siphon:
             return False
         if self.crawl_only:
             return False
+            
+        # For playbooks.com, treat rule pages as downloadable content
+        if 'playbooks.com/rules/' in url and not url.endswith('/'):
+            return True
+            
+        # Check file:/// URLs from dynamic scraper (they're captured downloads)
+        if url.startswith('file:///'):
+            try:
+                parsed_url = urllib.parse.urlparse(url)
+                path = parsed_url.path
+                ext = os.path.splitext(path)[1].lower().lstrip('.')
+                # Treat .mdc files as .md files for compatibility
+                if ext == 'mdc':
+                    ext = 'md'
+                if ext and self.download_extensions:
+                    return ext in self.download_extensions
+                return True  # If no extension filtering, download it
+            except:
+                return True
+            
+        # Check blob: URLs from dynamic scraper
+        if url.startswith('blob:'):
+            try:
+                # Extract filename from blob URL format: blob:filename:base64content
+                parts = url.split(':', 2)
+                if len(parts) >= 2:
+                    filename = parts[1]
+                    ext = os.path.splitext(filename)[1].lower().lstrip('.')
+                    # Treat .mdc files as .md files for compatibility
+                    if ext == 'mdc':
+                        ext = 'md'
+                    if ext and self.download_extensions:
+                        return ext in self.download_extensions
+                return True  # If no extension filtering, download it
+            except:
+                return True
+            
         try:
             parsed_url = urllib.parse.urlparse(url)
             path = parsed_url.path
             ext = os.path.splitext(path)[1].lower().lstrip('.')
+            # Treat .mdc files as .md files for compatibility
+            if ext == 'mdc':
+                ext = 'md'
         except:
             return False
         if not ext:
@@ -2182,41 +2297,83 @@ class Siphon:
             return ext in self.download_extensions
         return False
 
-    def fetch_url(self, url):
+    def fetch_url(self, url, max_retries=3):
         """
         Fetch content from a URL with retries and error handling.
         """
-        try:
-            proxy_to_use = None
-            if self.proxy_manager and hasattr(self.proxy_manager, 'get_proxy'):
-                try:
-                    proxy_to_use = self.proxy_manager.get_proxy(threading.get_ident(), url)
-                except Exception as e_proxy:
-                    logging.warning(f"Failed to get proxy for {url}: {e_proxy}")
+        last_exception = None
+        
+        for attempt in range(max_retries):
+            try:
+                proxy_to_use = None
+                if self.proxy_manager and hasattr(self.proxy_manager, 'get_proxy'):
+                    try:
+                        proxy_to_use = self.proxy_manager.get_proxy(threading.get_ident(), url)
+                    except Exception as e_proxy:
+                        logging.warning(f"Failed to get proxy for {url}: {e_proxy}")
 
-            response = self.session.get(
-                url,
-                timeout=self.timeout,
-                verify=self.verify_ssl,
-                proxies=proxy_to_use
-            )
-            response.raise_for_status()
-            # Use RobustResponse for better encoding detection
-            return RobustResponse(response.content, response, url).text
-        except requests.exceptions.HTTPError as e_http:
-            # Log 4xx client errors as warnings, not critical errors
-            if 400 <= e_http.response.status_code < 500:
-                logging.warning(f"Client error {e_http.response.status_code} fetching {url}: {e_http.response.reason}")
-            else:
-                logging.error(f"HTTP server error {e_http.response.status_code} fetching {url}: {e_http.response.reason}")
-            if self.proxy_manager and hasattr(self.proxy_manager, 'mark_proxy_failed') and proxy_to_use:
-                self.proxy_manager.mark_proxy_failed(proxy_to_use)
-        except requests.exceptions.RequestException as e_req:
-            logging.error(f"Request error fetching {url}: {e_req}")
-            if self.proxy_manager and hasattr(self.proxy_manager, 'mark_proxy_failed') and proxy_to_use:
-                self.proxy_manager.mark_proxy_failed(proxy_to_use)
-        except Exception as e_gen:
-            logging.error(f"General error fetching {url}: {e_gen}")
+                response = self.session.get(
+                    url,
+                    timeout=(self.timeout, self.timeout),  # (connect_timeout, read_timeout)
+                    verify=self.verify_ssl,
+                    proxies=proxy_to_use
+                )
+                response.raise_for_status()
+                # Use RobustResponse for better encoding detection
+                return RobustResponse(response.content, response, url).text
+                
+            except requests.exceptions.HTTPError as e_http:
+                last_exception = e_http
+                # Log 4xx client errors as warnings, not critical errors
+                if 400 <= e_http.response.status_code < 500:
+                    if self.verbose:
+                        logging.warning(f"Client error {e_http.response.status_code} fetching {url}: {e_http.response.reason}")
+                    else:
+                        logging.warning(f"Client error {e_http.response.status_code} fetching {url}: {e_http.response.reason}")
+                else:
+                    if self.verbose:
+                        logging.error(f"HTTP server error {e_http.response.status_code} fetching {url}: {e_http.response.reason}")
+                    else:
+                        logging.error(f"HTTP server error {e_http.response.status_code} fetching {url}: {e_http.response.reason}")
+                if self.proxy_manager and hasattr(self.proxy_manager, 'mark_proxy_failed') and proxy_to_use:
+                    self.proxy_manager.mark_proxy_failed(proxy_to_use)
+                break  # Don't retry HTTP errors
+                
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e_conn:
+                last_exception = e_conn
+                if self.proxy_manager and hasattr(self.proxy_manager, 'mark_proxy_failed') and proxy_to_use:
+                    self.proxy_manager.mark_proxy_failed(proxy_to_use)
+                if attempt < max_retries - 1:
+                    if self.verbose:
+                        logging.warning(f"Connection error fetching {url} (attempt {attempt + 1}/{max_retries}): {e_conn}")
+                    else:
+                        logging.warning(f"Connection error fetching {url} (attempt {attempt + 1}/{max_retries}): Connection failed")
+                    time.sleep(0.5)  # Shorter delay for faster proxy rotation
+                    continue
+                else:
+                    if self.verbose:
+                        logging.error(f"Connection error fetching {url} (final attempt): {e_conn}")
+                    else:
+                        logging.error(f"Connection error fetching {url} (final attempt): Connection failed")
+                        
+            except requests.exceptions.RequestException as e_req:
+                last_exception = e_req
+                if self.verbose:
+                    logging.error(f"Request error fetching {url}: {e_req}")
+                else:
+                    logging.error(f"Request error fetching {url}: Request failed")
+                if self.proxy_manager and hasattr(self.proxy_manager, 'mark_proxy_failed') and proxy_to_use:
+                    self.proxy_manager.mark_proxy_failed(proxy_to_use)
+                break  # Don't retry other request exceptions
+                
+            except Exception as e_gen:
+                last_exception = e_gen
+                if self.verbose:
+                    logging.error(f"General error fetching {url}: {e_gen}")
+                else:
+                    logging.error(f"General error fetching {url}: Unexpected error")
+                break  # Don't retry general exceptions
+                
         return None
 
     def parse_html(self, html_content):
@@ -2252,6 +2409,73 @@ class Siphon:
                     logging.debug(f"Could not process or resolve link '{href}' from base '{base_url}': {e}")
         return links
 
+    def extract_main_content(self, soup, url):
+        """
+        Extract the main content from a HTML page and convert to markdown-like format.
+        """
+        # For playbooks.com rule pages, look for the main content area
+        if 'playbooks.com/rules/' in url:
+            # Try to find the main content container
+            content_selectors = [
+                'main',
+                '[role="main"]', 
+                '.main-content',
+                '.content',
+                'article',
+                '.rule-content',
+                '.markdown-body'
+            ]
+            
+            content_elem = None
+            for selector in content_selectors:
+                content_elem = soup.select_one(selector)
+                if content_elem:
+                    break
+            
+            if not content_elem:
+                # Fallback to body content, excluding nav/header/footer
+                content_elem = soup.select_one('body')
+                if content_elem:
+                    # Remove navigation, header, footer elements
+                    for unwanted in content_elem.select('nav, header, footer, .navbar, .nav, .header, .footer, script, style'):
+                        unwanted.decompose()
+            
+            if content_elem:
+                # Extract text content with basic formatting
+                text_content = ""
+                title = soup.select_one('title')
+                if title:
+                    text_content += f"# {title.get_text().strip()}\n\n"
+                
+                # Extract meta description
+                meta_desc = soup.select_one('meta[name="description"]')
+                if meta_desc:
+                    text_content += f"{meta_desc.get('content', '').strip()}\n\n"
+                
+                # Process content elements
+                for elem in content_elem.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'pre', 'code', 'ul', 'ol', 'li']):
+                    tag_name = elem.name
+                    text = elem.get_text().strip()
+                    
+                    if not text:
+                        continue
+                    
+                    if tag_name.startswith('h'):
+                        level = int(tag_name[1])
+                        text_content += f"{'#' * level} {text}\n\n"
+                    elif tag_name == 'p':
+                        text_content += f"{text}\n\n"
+                    elif tag_name in ['pre', 'code']:
+                        text_content += f"```\n{text}\n```\n\n"
+                    elif tag_name in ['ul', 'ol']:
+                        continue  # Process individual list items
+                    elif tag_name == 'li':
+                        text_content += f"- {text}\n"
+                
+                return text_content.strip()
+        
+        return None
+
     def download_file(self, url):
         """
         Download a file from a URL, with robust filename handling.
@@ -2259,6 +2483,45 @@ class Siphon:
         if url in self.downloaded_files:
             logging.debug(f"File already downloaded: {url}")
             return
+        
+        # Handle playbooks.com rule pages by extracting content as markdown
+        if 'playbooks.com/rules/' in url and not url.endswith('/'):
+            try:
+                # Get the HTML content
+                html_content = self.fetch_url(url)
+                if html_content:
+                    soup = self.parse_html(html_content)
+                    markdown_content = self.extract_main_content(soup, url)
+                    
+                    if markdown_content:
+                        # Generate filename from URL
+                        parsed_url = urllib.parse.urlparse(url)
+                        rule_name = parsed_url.path.split('/')[-1] or "rule"
+                        filename = f"{rule_name}.md"
+                        
+                        # Sanitize filename
+                        safe_filename = "".join(c for c in filename if c.isalnum() or c in ['.', '_', '-']).strip()
+                        if not safe_filename:
+                            safe_filename = "rule.md"
+                        
+                        # Ensure downloads_subdir exists
+                        os.makedirs(self.downloads_subdir, exist_ok=True)
+                        
+                        file_path = os.path.join(self.downloads_subdir, safe_filename)
+                        
+                        with open(file_path, 'w', encoding='utf-8') as f:
+                            f.write(markdown_content)
+                        
+                        print(f"    + {safe_filename}")
+                        logging.info(f"SUCCESS: Saved rule content to {file_path}")
+                        self.downloaded_files.add(url)
+                        self.discovered_files.add(url)
+                        return
+                    else:
+                        logging.warning(f"Could not extract content from {url}")
+            except Exception as e:
+                logging.error(f"Error processing rule page {url}: {e}")
+                # Fall through to normal file download logic
 
         # Handle blob URIs from dynamic scraper
         if url.startswith('blob:'):
@@ -2266,17 +2529,21 @@ class Siphon:
                 _, filename, b64_content = url.split(':', 2)
                 content = base64.b64decode(b64_content)
                 
+                # Convert .mdc extension to .md
+                if filename.endswith('.mdc'):
+                    filename = filename[:-4] + '.md'
+                
                 # Sanitize filename
                 safe_filename = "".join(c for c in filename if c.isalnum() or c in ['.', '_', '-']).strip()
                 if not safe_filename:
-                    safe_filename = "downloaded_file"
+                    safe_filename = "downloaded_file.md"
 
                 file_path = os.path.join(self.downloads_subdir, safe_filename)
                 
                 with open(file_path, 'wb') as f:
                     f.write(content)
                 
-                print(f"    💾 Downloaded: {safe_filename}")
+                print(f"    + {safe_filename}")
                 logging.info(f"SUCCESS: Saved blob content to {file_path}")
                 self.downloaded_files.add(url) # Use blob URI as the unique identifier
                 self.discovered_files.add(url)
@@ -2289,80 +2556,88 @@ class Siphon:
         if url.startswith('file:///'):
             try:
                 parsed_url = urllib.parse.urlparse(url)
-                source_path = urllib.request.url2pathname(parsed_url.path)
-                filename = os.path.basename(source_path)
+                local_path = parsed_url.path
                 
+                # Convert Windows path format
+                if local_path.startswith('/') and ':' in local_path:
+                    local_path = local_path[1:]  # Remove leading slash for Windows paths
+                
+                # Get filename from path
+                filename = os.path.basename(local_path)
+                
+                # Convert .mdc extension to .md
+                if filename.endswith('.mdc'):
+                    filename = filename[:-4] + '.md'
+                
+                # Sanitize filename
                 safe_filename = "".join(c for c in filename if c.isalnum() or c in ['.', '_', '-']).strip()
-                dest_path = os.path.join(self.downloads_subdir, safe_filename)
+                if not safe_filename:
+                    safe_filename = "downloaded_file.md"
 
-                shutil.move(source_path, dest_path)
+                # Copy the file to our downloads directory
+                file_path = os.path.join(self.downloads_subdir, safe_filename)
                 
-                print(f"    💾 Downloaded: {safe_filename}")
-                logging.info(f"SUCCESS: Moved captured download to {dest_path}")
+                if os.path.exists(local_path):
+                    with open(local_path, 'rb') as src, open(file_path, 'wb') as dst:
+                        dst.write(src.read())
+                    print(f"    + {safe_filename}")
+                    logging.info(f"SUCCESS: Copied file from {local_path} to {file_path}")
+                else:
+                    logging.warning(f"Local file not found: {local_path}")
+                    return
+                
                 self.downloaded_files.add(url)
                 self.discovered_files.add(url)
                 return
             except Exception as e:
-                logging.error(f"Failed to move captured file {url}: {e}")
+                logging.error(f"Failed to download from file URI {url}: {e}")
                 return
 
-        # Perform a final check before attempting download
-        # This is redundant if called from crawl() but good for direct calls
-        if not self.should_download_file(url) and not self.crawl_only:
-             logging.warning(f"Download attempt for {url} but should_download_file is false and not crawl_only.")
-             # Depending on strictness, could return here. For now, proceed if it reached here.
-
+        # Handle regular HTTP/HTTPS URLs
         try:
-            logging.info(f"Attempting to download: {url}")
             proxy_to_use = None
             if self.proxy_manager and hasattr(self.proxy_manager, 'get_proxy'):
                 try:
                     proxy_to_use = self.proxy_manager.get_proxy(threading.get_ident(), url)
                 except Exception as e_proxy:
-                    logging.warning(f"Failed to get proxy for download {url}: {e_proxy}")
+                    logging.warning(f"Failed to get proxy for {url}: {e_proxy}")
 
             response = self.session.get(
                 url,
-                timeout=self.timeout, # Consider a larger timeout for file downloads
+                timeout=(self.timeout, self.timeout),
                 verify=self.verify_ssl,
                 proxies=proxy_to_use,
                 stream=True
             )
             response.raise_for_status()
 
-            filename = ""
-            content_disp = response.headers.get('content-disposition')
-            if content_disp:
-                # Handles filename="filename.ext" and filename*=UTF-8''filename.ext
-                fn_match = re.search(r'filename\\*?=(?:UTF-\\d\\\'\\\')?([^;\\n]+)', content_disp, re.IGNORECASE)
-                if fn_match:
-                    potential_fn = fn_match.group(1).strip(' \\"\\\'')
-                    try:
-                        filename = urllib.parse.unquote(potential_fn, encoding='utf-8', errors='replace')
-                    except Exception:
-                        filename = potential_fn # Fallback
-
-            if not filename or filename == '/': # From URL path if not in header
-                parsed_url_path = urllib.parse.urlparse(url).path
-                fn_from_path = os.path.basename(parsed_url_path)
-                if fn_from_path and fn_from_path != '/':
-                    filename = fn_from_path
+            # Get filename from URL or headers
+            filename = None
+            content_disposition = response.headers.get('content-disposition', '')
+            if 'filename=' in content_disposition:
+                filename = content_disposition.split('filename=')[1].strip('"\'')
             
-            if not filename or filename == '/': # Fallback filename
-                path_basename = os.path.basename(urllib.parse.urlparse(url).path.rstrip('/'))
-                file_ext = 'unknown'
-                if path_basename and '.' in path_basename:
-                    file_ext = path_basename.split('.')[-1]
-                elif path_basename:
-                    file_ext = 'nodot'
-                filename = f"siphon_dl_{len(self.downloaded_files)}_{file_ext}"
+            if not filename:
+                parsed_url = urllib.parse.urlparse(url)
+                filename = os.path.basename(parsed_url.path) or "downloaded_file"
+                if not os.path.splitext(filename)[1]:
+                    # Try to guess extension from content-type
+                    content_type = response.headers.get('content-type', '').lower()
+                    if 'markdown' in content_type or 'text/plain' in content_type:
+                        filename += '.md'
+                    else:
+                        filename += '.bin'
 
-            # Sanitize filename (more restrictive for broader filesystem compatibility)
-            filename = re.sub(r'[^a-zA-Z0-9._-]', '_', filename)
-            filename = filename.strip('_') # Remove leading/trailing underscores from sanitization
-            filename = filename[:200] # Limit length
+            # Convert .mdc extension to .md
+            if filename.endswith('.mdc'):
+                filename = filename[:-4] + '.md'
+            
+            # Sanitize filename
+            filename = "".join(c for c in filename if c.isalnum() or c in ['.', '_', '-']).strip()
+            if len(filename) > 200:
+                filename = filename[:200] # Limit length
             if not filename: # If sanitization results in empty filename
-                 filename = f"siphon_dl_{len(self.downloaded_files)}_sanitized"
+                 filename = f"siphon_dl_{len(self.downloaded_files)}_sanitized.md"
 
             filepath = os.path.join(self.downloads_subdir, filename)
             
@@ -2374,7 +2649,7 @@ class Siphon:
                     if chunk: 
                         f.write(chunk)
             
-            print(f"    💾 Downloaded: {filename}")
+            print(f"    + {filename}")
             self.downloaded_files.add(url)
             self.discovered_files.add(url) 
             logging.info(f"Successfully downloaded: {filepath} (from {url})")
@@ -2436,6 +2711,7 @@ def main():
     parser.add_argument("--browser-timeout", help="Browser timeout in seconds", type=int, default=30)
     parser.add_argument("--click-elements", help="CSS selectors for elements to click (comma-separated)")
     parser.add_argument("--test-proxies", help="Test proxies on startup before crawling", action="store_true")
+    parser.add_argument("--threads", help="Number of worker threads", type=int, default=5)
     
     args = parser.parse_args()
     
@@ -2480,10 +2756,15 @@ def main():
         username, password = args.auth.split(":", 1)
         auth = (username, password)
         
-    # Parse proxy
+    # Parse proxy - can be a single proxy URL or a file path
     proxy = None
     if args.proxy:
-        proxy = {"http": args.proxy, "https": args.proxy}
+        # Check if it's a file path
+        if os.path.isfile(args.proxy):
+            proxy = args.proxy  # Pass the file path directly
+        else:
+            # Treat as a single proxy URL
+            proxy = {"http": args.proxy, "https": args.proxy}
         
     # Parse file extensions
     download_extensions = args.filetype.split(",") if args.filetype else None
@@ -2525,7 +2806,9 @@ def main():
         exclude_urls=exclude_urls,
         include_urls=include_urls,
         dynamic_mode=args.dynamic,
-        test_proxies_on_start=args.test_proxies
+        test_proxies_on_start=args.test_proxies,
+        max_threads=args.threads,
+        verbose=args.verbose
     )
     
     try:
@@ -2535,13 +2818,13 @@ def main():
         # Print summary
         if not args.quiet:
             print("\n" + "="*60)
-            print("🎯 CRAWL SUMMARY")
+            print("CRAWL SUMMARY")
             print("="*60)
-            print(f"📊 URLs visited: {len(siphon_instance.visited_urls)}")
-            print(f"🔍 Files discovered: {len(siphon_instance.discovered_files)}")
-            print(f"💾 Files downloaded: {len(siphon_instance.downloaded_files)}")
+            print(f"URLs visited: {len(siphon_instance.visited_urls)}")
+            print(f"Files discovered: {len(siphon_instance.discovered_files)}")
+            print(f"Files downloaded: {len(siphon_instance.downloaded_files)}")
             if siphon_instance.downloaded_files:
-                print(f"📁 Output directory: {siphon_instance.output_dir}")
+                print(f"Output directory: {siphon_instance.output_dir}")
             print("="*60)
             
     except KeyboardInterrupt:

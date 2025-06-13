@@ -1378,18 +1378,31 @@ class DynamicScraper:
         self.browser = None
         self.page = None
 
-    def start(self):
+    def start(self, proxy=None):
         if self.browser: 
             return
         try:
             logging.debug("Starting Playwright context...")
             self.playwright = sync_playwright().start()
             
+            proxy_config = None
+            if proxy:
+                proxy_url = proxy.get('http') or proxy.get('https')
+                if proxy_url:
+                    parsed_proxy = urllib.parse.urlparse(proxy_url)
+                    proxy_config = {'server': parsed_proxy.netloc}
+                    if parsed_proxy.username:
+                        proxy_config['username'] = parsed_proxy.username
+                    if parsed_proxy.password:
+                        proxy_config['password'] = parsed_proxy.password
+                    logging.info(f"Dynamic browser will use proxy: {proxy_config['server']}")
+
             logging.debug("Launching Chromium browser...")
             # Add timeout and better error handling for browser launch
             self.browser = self.playwright.chromium.launch(
                 headless=self.headless,
-                timeout=30000  # 30 second timeout for browser launch
+                proxy=proxy_config,
+                timeout=60000  # 60 second timeout for browser launch
             )
             
             logging.debug("Creating new page...")
@@ -1465,6 +1478,70 @@ class DynamicScraper:
             logging.error(f"Failed to extract links dynamically from {base_url}: {e}")
             return set()
 
+    def _handle_bot_protection(self):
+        """
+        Handle common anti-bot protection screens with minimal intervention.
+        """
+        if not self.page:
+            return
+            
+        try:
+            # Wait a moment for any protection screens to load
+            self.page.wait_for_timeout(3000)
+            
+            logging.info("Checking for bot protection screens...")
+            
+            # Check if we're on a protection page by looking for common text
+            page_text = self.page.text_content()
+            if any(text in page_text.lower() for text in ["not a robot", "verify", "protection", "click allow"]):
+                logging.info("Detected potential bot protection screen")
+                
+                # Try multiple strategies to find and click the protection element
+                strategies = [
+                    # Strategy 1: Look for "Allow" button specifically
+                    lambda: self.page.get_by_text("Allow", exact=True).first,
+                    lambda: self.page.get_by_text("allow", exact=True).first,
+                    lambda: self.page.get_by_text("ALLOW", exact=True).first,
+                    
+                    # Strategy 2: Look for buttons containing allow/continue
+                    lambda: self.page.get_by_role("button").filter(has_text="allow").first,
+                    lambda: self.page.get_by_role("button").filter(has_text="continue").first,
+                    lambda: self.page.get_by_role("button").filter(has_text="proceed").first,
+                    
+                    # Strategy 3: Look for any clickable element near protection text
+                    lambda: self.page.locator("*:has-text('not a robot')").first,
+                    lambda: self.page.locator("*:has-text('Allow')").first,
+                ]
+                
+                for i, strategy in enumerate(strategies):
+                    try:
+                        element = strategy()
+                        if element and element.is_visible():
+                            logging.info(f"Found protection element with strategy {i+1}")
+                            element.click(timeout=5000)
+                            logging.info(f"Successfully clicked protection element")
+                            # Wait for page transition
+                            self.page.wait_for_timeout(5000)
+                            # Check if we're still on protection page
+                            new_page_text = self.page.text_content()
+                            if "not a robot" not in new_page_text.lower():
+                                logging.info("Successfully bypassed bot protection")
+                                return True
+                            else:
+                                logging.info("Still on protection page, trying next strategy")
+                    except Exception as e:
+                        logging.debug(f"Strategy {i+1} failed: {e}")
+                        continue
+                        
+                logging.warning("All bot protection bypass strategies failed")
+            else:
+                logging.info("No bot protection detected")
+                    
+        except Exception as e:
+            logging.debug(f"Bot protection handling failed: {e}")
+        
+        return False
+
     def find_and_click_downloads(self, download_extensions=None, keywords=None, delay=1.0):
         """
         Find and interact with download elements using multiple robust strategies.
@@ -1478,6 +1555,9 @@ class DynamicScraper:
         keywords = keywords or ['download', 'save', 'export', 'get', 'fetch']
         # Only use provided extensions, don't fall back to defaults
         download_extensions = download_extensions or []
+        
+        # Handle anti-bot protection first
+        self._handle_bot_protection()
         
         logging.info(f"Starting download detection with extensions: {download_extensions}")
         
@@ -1956,6 +2036,13 @@ class Siphon:
         self.dynamic_scraper = None
         self.verbose = verbose
         
+        # Dynamic scraping with Playwright is not thread-safe without major re-architecture.
+        # Force single-threaded mode for stability when dynamic mode is enabled.
+        self.max_threads = max_threads
+        if self.dynamic_mode in ["auto", "always"] and self.max_threads > 1:
+            logging.warning(f"Dynamic scraping is enabled with {self.max_threads} threads. Forcing to 1 thread for stability.")
+            self.max_threads = 1
+        
         # Don't initialize dynamic scraper immediately to avoid hanging
         # It will be initialized when first needed
         # if self.dynamic_mode == "always" and PLAYWRIGHT_AVAILABLE:
@@ -1972,7 +2059,14 @@ class Siphon:
                     user_agent=self.user_agent
                 )
                 logging.info("Starting Playwright browser...")
-                self.dynamic_scraper.start()
+
+                # Get a proxy for the browser if the manager exists
+                proxy_for_browser = None
+                if self.proxy_manager:
+                    # Get a proxy for the main browser instance using a unique ID
+                    proxy_for_browser = self.proxy_manager.get_proxy("dynamic_browser_main")
+
+                self.dynamic_scraper.start(proxy=proxy_for_browser)
                 logging.info("Dynamic scraper initialized successfully")
                 return True
             except Exception as e:
@@ -2131,37 +2225,53 @@ class Siphon:
                         
                     self.visited_urls.add(url)
                 
-                # Only show progress for files that match our criteria or when downloading
-                should_download = self.should_download_file(url)
-                
                 # Show progress for all URLs when verbose
-                if self.verbose or should_download:
+                if self.verbose:
                     print(f"[{thread_id}] Crawling: {url}")
                 
-                # Try static scraping first (always enabled now for better threading)
-                static_links = set()
+                links = set()
+                
+                # Phase 1: Static scrape attempt (if not in 'always' dynamic mode)
                 html_content = None
+                if self.dynamic_mode != 'always':
                 html_content = self.fetch_url(url)
+                
+                # Phase 2: Process static results or decide to use dynamic
                 if html_content:
+                    if self.verbose: print(f"    -> Static fetch OK")
                     soup = self.parse_html(html_content)
                     static_links = self.extract_links(soup, url)
-                    if self.verbose:
-                        print(f"    -> Found {len(static_links)} links")
-                
-                # Use dynamic scraping only when necessary and single-threaded
-                dynamic_links = set()
-                use_dynamic = (self.max_threads == 1 and 
-                              self.should_use_dynamic_scraping(url, static_links))
-                
-                if use_dynamic:
-                    if should_download:
-                        print(f"[{thread_id}] {url} -> Dynamic mode")
-                    dynamic_links = self.dynamic_scrape(url)
+                    links.update(static_links)
                     
-                # Combine links from both methods
-                links = list(static_links.union(dynamic_links))
+                    # If static scrape found files, we might not need dynamic
+                    target_files_found = self.filter_target_files(static_links)
+                    if target_files_found and self.dynamic_mode == 'auto':
+                        if self.verbose: print(f"    -> Static found target files, skipping dynamic mode")
+                        # We have what we need, can skip dynamic.
+                    elif self.dynamic_mode == 'auto':
+                         # Static worked but found nothing useful, try dynamic
+                         if self.verbose: print(f"    -> Static found no targets, trying Dynamic mode...")
+                    dynamic_links = self.dynamic_scrape(url)
+                         if dynamic_links:
+                             links.update(dynamic_links)
+
+                # Phase 3: Use dynamic if static failed (in auto) or forced (in always)
+                elif self.dynamic_mode in ['auto', 'always']:
+                        if self.verbose:
+                        if self.dynamic_mode == 'auto':
+                            print(f"    -> Static fetch failed, falling back to Dynamic mode...")
+                        else: # always
+                            print(f"    -> Using Dynamic mode as requested...")
+                            
+                    dynamic_links = self.dynamic_scrape(url)
+                    if dynamic_links:
+                        links.update(dynamic_links)
                 
+                else: # static fetch failed and mode is 'never'
+                    if self.verbose: print(f"    -> Static fetch failed, dynamic mode disabled.")
+
                 # Process the links
+                links = list(links)
                 files_downloaded = 0
                 potential_files = []
                 new_crawl_urls = 0
@@ -2172,8 +2282,6 @@ class Siphon:
                         
                     if self.should_download_file(link):
                         potential_files.append(link)
-                        if self.verbose:
-                            print(f"    -> Downloading: {link}")
                         self.download_file(link)
                         files_downloaded += 1
                     elif self.should_crawl_url(link) and depth < self.max_depth:
@@ -2183,12 +2291,12 @@ class Siphon:
                 
                 # Show summary - only show meaningful progress
                 if files_downloaded > 0:
-                    print(f"    -> Downloaded {files_downloaded} file(s)")
+                    print(f"    -> Downloaded {files_downloaded} file(s) from page.")
                 elif self.verbose:
                     if new_crawl_urls > 0:
                         print(f"    -> Added {new_crawl_urls} URLs to crawl queue")
-                    if len(potential_files) > 0:
-                        print(f"    -> Found {len(potential_files)} potential files but none matched criteria")
+                    if len(potential_files) > 0 and not self.crawl_only:
+                        print(f"    -> Found {len(potential_files)} potential files but none were ultimately downloaded")
                 
                 if self.delay > 0:
                     time.sleep(self.delay)

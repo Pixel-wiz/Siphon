@@ -593,8 +593,14 @@ class WebScraper:
         console_handler.setFormatter(console_formatter)
         console_handler.stream = open(sys.stdout.fileno(), 'w', encoding='utf-8', closefd=False)
         
+        # Determine the logging level based on the verbose flag
+        if self.verbose:
+            log_level = logging.INFO
+        else:
+            log_level = logging.WARNING # Default to WARNING if not verbose
+            
         logging.basicConfig(
-            level=logging.INFO,
+            level=log_level,
             handlers=[file_handler, console_handler]
         )
         
@@ -1370,10 +1376,11 @@ class WebScraper:
 
 # DynamicScraper class for handling JavaScript-rendered pages
 class DynamicScraper:
-    def __init__(self, headless=True, timeout=30000, user_agent=None):
+    def __init__(self, headless=False, timeout=30000, user_agent=None, verbose=False):
         self.headless = headless
         self.timeout = timeout
         self.user_agent = user_agent
+        self.verbose = verbose # Add verbose attribute
         self.playwright = None
         self.browser = None
         self.page = None
@@ -1406,7 +1413,10 @@ class DynamicScraper:
             )
             
             logging.debug("Creating new page...")
-            self.page = self.browser.new_page(user_agent=self.user_agent)
+            self.page = self.browser.new_page(
+                user_agent=self.user_agent,
+                viewport={'width': 1920, 'height': 1080} # Set a realistic viewport
+            )
             
             # Set page timeout
             self.page.set_default_timeout(self.timeout)
@@ -1561,99 +1571,138 @@ class DynamicScraper:
         
         logging.info(f"Starting download detection with extensions: {download_extensions}")
         
-        # Strategy 1: Modern Playwright locator methods (preferred)
+        # Strategy 1: Use page.evaluate() to find and click elements with data-download attribute
         try:
             elements_found = 0
             
-            # Find elements by text content (case-insensitive)
-            for keyword in keywords:
+            # Find all elements with the 'data-download' attribute
+            # Use page.evaluate to run JavaScript in the browser context
+            # This returns an array of outerHTML strings for the matching elements
+            elements_html = self.page.evaluate("""
+                Array.from(document.querySelectorAll('[data-download]')).map(el => el.outerHTML);
+            """)
+            
+            if self.verbose and elements_html:
+                logging.debug(f"Found {len(elements_html)} elements with 'data-download' attribute via JavaScript.")
+            
+            for i, element_html in enumerate(elements_html):
+                # Re-locate the element using its data-download attribute value for a more precise click
+                # This is safer than trying to click based on the outerHTML string
+                data_download_value = re.search(r'data-download="([^"]+)"', element_html)
+                if not data_download_value:
+                    continue
+                data_download_value = data_download_value.group(1)
+                
+                # Use page.locator to get a Playwright Locator for the element
+                locator = self.page.locator(f'[data-download="{data_download_value}"]').first
+                
+                if locator and locator.is_visible():
+                    elements_found += 1
+                    logging.debug(f"Attempting to click element with data-download='{data_download_value}'")
+                    try: # This try block handles the popup expectation
+                        with self.page.expect_event("popup", timeout=5000) as popup_info:
+                            locator.click(timeout=5000, force=True) # Added force=True
+                        new_page = popup_info.value
+                        logging.info(f"New popup page opened at: {new_page.url}")
+                        new_page.wait_for_load_state("domcontentloaded", timeout=10000)
+                        
+                        with new_page.expect_download(timeout=15000) as download_info:
+                            logging.info("Waiting for download to start from new popup page...")
+                        download = download_info.value
+                        logging.info(f"Download started from new popup page: {download.suggested_filename}")
+                        temp_file_path = os.path.join(tempfile.gettempdir(), download.suggested_filename)
+                        download.save_as(temp_file_path)
+                        file_uri = pathlib.Path(temp_file_path).as_uri()
+                        discovered_downloads.append(file_uri)
+                        logging.info(f"Captured download from new popup page: {download.suggested_filename}")
+                        new_page.close() # Close the popup page after download
+                    except PlaywrightTimeoutError as e: # Catches timeout for popup
+                        logging.info(f"PlaywrightTimeoutError: {e}. No new popup page detected after click, trying direct download expectation.")
+                        try: # This try block handles the direct download expectation
+                            with self.page.expect_download(timeout=15000) as download_info:
+                                locator.click(timeout=5000, force=True) # Added force=True
+                            download = download_info.value
+                            logging.info(f"Download started from direct click: {download.suggested_filename}")
+                            temp_file_path = os.path.join(tempfile.gettempdir(), download.suggested_filename)
+                            download.save_as(temp_file_path)
+                            file_uri = pathlib.Path(temp_file_path).as_uri()
+                            discovered_downloads.append(file_uri)
+                            logging.info(f"Captured download from direct click: {download.suggested_filename}")
+                        except Exception as e2: # Catches any error during direct download attempt
+                            logging.error(f"Direct click download strategy also failed: {e2}")
+                    except Exception as e: # Catches any other general error from the initial click attempt
+                        logging.error(f"Error during click and download expectation: {e}")
+                else:
+                    if self.verbose:
+                        logging.debug(f"Element with data-download='{data_download_value}' not visible or not found by locator.")
+
+            logging.info(f"Strategy 1 (JavaScript evaluation and click) found {elements_found} elements")
+            
+        except Exception as e:
+            logging.warning(f"JavaScript evaluation strategy failed: {e}")
+
+        # Strategy 2: JavaScript blob detection (for dynamic content) - Renamed from Strategy 3
+        try:
+            elements_found = 0
+            
+            # Look for elements with Alpine.js @click or onclick containing blob operations
+            js_elements = self.page.query_selector_all("[onclick], [x-on\\:click]")
+            for element in js_elements:
                 try:
-                    # Use getByText for exact and partial matches
-                    text_elements = self.page.get_by_text(keyword, exact=False).all()
-                    for element in text_elements:
-                        if element.is_visible():
-                            elements_found += 1
-                            href = element.get_attribute('href')
-                            if href:
-                                absolute_url = urllib.parse.urljoin(self.page.url, href)
-                                discovered_downloads.append(absolute_url)
-                                logging.info(f"Found download via text '{keyword}': {absolute_url}")
-                except Exception as e:
-                    logging.debug(f"Text search for '{keyword}' failed: {e}")
+                    onclick_attr = (element.get_attribute('onclick') or
+                                  element.get_attribute('@click') or
+                                  element.get_attribute('x-on:click') or "")
                     
-            # Find elements by role (buttons, links)
-            try:
-                # Look for download buttons
-                buttons = self.page.get_by_role("button").all()
-                for button in buttons:
-                    if button.is_visible():
-                        text_content = button.text_content() or ""
-                        if any(kw.lower() in text_content.lower() for kw in keywords):
-                            elements_found += 1
-                            # Try to click and capture download
+                    if 'blob' in onclick_attr.lower() or 'download' in onclick_attr.lower():
+                        elements_found += 1
+                        blob_info = self.extract_blob_info(element)
+                        if blob_info and blob_info not in discovered_downloads:
+                            discovered_downloads.append(blob_info)
+                            logging.info(f"Found blob download: {blob_info}")
+                        else:
+                            # Try clicking to trigger download
                             try:
-                                with self.page.expect_download(timeout=5000) as download_info:
-                                    button.click(timeout=3000)
+                                with self.page.expect_download(timeout=3000) as download_info:
+                                    element.click(timeout=2000)
                                 download = download_info.value
                                 temp_file_path = os.path.join(tempfile.gettempdir(), download.suggested_filename)
                                 download.save_as(temp_file_path)
                                 file_uri = pathlib.Path(temp_file_path).as_uri()
-                                discovered_downloads.append(file_uri)
-                                logging.info(f"Captured download from button: {download.suggested_filename}")
+                                if file_uri not in discovered_downloads:
+                                    discovered_downloads.append(file_uri)
+                                    logging.info(f"Captured JS-triggered download: {download.suggested_filename}")
                             except Exception as e:
-                                logging.debug(f"Button click failed: {e}")
+                                logging.debug(f"JS element click failed: {e}")
                                 
-                # Look for download links
-                links = self.page.get_by_role("link").all()
-                for link in links:
-                    if link.is_visible():
-                        href = link.get_attribute('href')
-                        if href:
-                            absolute_url = urllib.parse.urljoin(self.page.url, href)
-                            # Check if it's a direct file link
-                            if any(absolute_url.lower().endswith(f'.{ext.lower()}') for ext in download_extensions):
-                                elements_found += 1
-                                discovered_downloads.append(absolute_url)
-                                logging.info(f"Found direct file link: {absolute_url}")
-                            # Check if link text suggests download
-                            elif any(kw.lower() in (link.text_content() or "").lower() for kw in keywords):
-                                elements_found += 1
-                                discovered_downloads.append(absolute_url)
-                                logging.info(f"Found download link by text: {absolute_url}")
-                                
-            except Exception as e:
-                logging.debug(f"Role-based search failed: {e}")
-                
-            logging.info(f"Strategy 1 (Modern locators) found {elements_found} elements")
+                except Exception as e:
+                    logging.debug(f"JS element processing failed: {e}")
+                    
+            logging.info(f"Strategy 2 (JS/Blob detection) found {elements_found} additional elements")
             
         except Exception as e:
-            logging.warning(f"Modern locator strategy failed: {e}")
+            logging.warning(f"JavaScript detection strategy failed: {e}")
 
-        # Strategy 2: CSS selectors with proper syntax (fallback)
+        # Strategy 3: XPath fallback (most robust but slower) - Renamed from Strategy 4
         try:
             elements_found = 0
             
-            # Build valid CSS selectors
-            css_selectors = [
-                "[download]",  # Elements with download attribute
-                "[onclick*='download']",  # Elements with download in onclick
-                "a:has-text(\"download\")",  # Links containing "download" text
-                "button:has-text(\"download\")",  # Buttons containing "download" text
-                "a:has-text(\"save\")",  # Links containing "save" text
-                "button:has-text(\"save\")",  # Buttons containing "save" text
-                "a:has-text(\"export\")",  # Links containing "export" text
-                "button:has-text(\"export\")",  # Buttons containing "export" text
+            xpath_selectors = [
+                "//a[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'download')]",
+                "//button[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'download')]",
+                "//a[contains(translate(@href, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'download')]",
+                "//a[@download]",
+                "//button[@download]",
             ]
-
-            # Add file extension selectors
+            
+            # Add XPath for file extensions
             for ext in download_extensions:
-                css_selectors.append(f"a[href$='.{ext.lower()}']")
-                css_selectors.append(f"a[href*='.{ext.lower()}']")
-
-            # Query elements using valid CSS selectors
-            for selector in css_selectors:
+                xpath_selectors.append(f"//a[contains(@href, '.{ext.lower()}')]")
+                
+            for xpath in xpath_selectors:
                 try:
-                    elements = self.page.query_selector_all(selector)
+                    elements = self.page.query_selector_all(f"xpath={xpath}")
+                    if self.verbose and elements:
+                        logging.debug(f"Found {len(elements)} elements with XPath selector '{xpath}'")
                     for element in elements:
                         if element.is_visible():
                             elements_found += 1
@@ -1662,9 +1711,22 @@ class DynamicScraper:
                                 absolute_url = urllib.parse.urljoin(self.page.url, href)
                                 if absolute_url not in discovered_downloads:
                                     discovered_downloads.append(absolute_url)
-                                    logging.info(f"Found via CSS '{selector}': {absolute_url}")
+                                    logging.info(f"Found via XPath: {absolute_url}")
+                            else: # If no href, try clicking the element
+                                try:
+                                    logging.debug(f"Clicking element found by XPath selector '{xpath}' (no href): {element.text_content()}")
+                                    with self.page.expect_download(timeout=5000) as download_info:
+                                        element.click(timeout=3000)
+                                    download = download_info.value
+                                    temp_file_path = os.path.join(tempfile.gettempdir(), download.suggested_filename)
+                                    download.save_as(temp_file_path)
+                                    file_uri = pathlib.Path(temp_file_path).as_uri()
+                                    discovered_downloads.append(file_uri)
+                                    logging.info(f"Captured download from clicked XPath element: {download.suggested_filename}")
+                                except Exception as e:
+                                    logging.debug(f"Clicking XPath element failed: {e}")
                 except Exception as e:
-                    logging.debug(f"CSS selector '{selector}' failed: {e}")
+                    logging.debug(f"XPath '{xpath}' failed: {e}")
                     
             logging.info(f"Strategy 2 (CSS selectors) found {elements_found} additional elements")
             
@@ -2054,9 +2116,10 @@ class Siphon:
             try:
                 logging.info("Initializing dynamic scraper (Playwright browser)...")
                 self.dynamic_scraper = DynamicScraper(
-                    headless=True, 
+                    headless=True,
                     timeout=min(self.timeout * 1000, 30000),  # Cap at 30 seconds
-                    user_agent=self.user_agent
+                    user_agent=self.user_agent,
+                    verbose=self.verbose # Pass verbose to DynamicScraper
                 )
                 logging.info("Starting Playwright browser...")
 
@@ -2123,6 +2186,51 @@ class Siphon:
                 logging.warning(f"Dynamic navigation to {url} failed.")
                 return set()
             
+            # Find and click elements that might trigger downloads first
+            try:
+                logging.info(f"Attempting dynamic interaction for downloads on: {url}")
+                discovered_downloads = self.dynamic_scraper.find_and_click_downloads(self.download_extensions)
+                if discovered_downloads:
+                    all_links.update(discovered_downloads)
+                    logging.info(f"Found {len(discovered_downloads)} downloads via dynamic interaction")
+                else:
+                    logging.info("No downloads found via dynamic interaction.")
+            except Exception as e:
+                logging.error(f"Error during dynamic download interaction on {url}: {e}")
+
+            # Wait for network to be idle after interactions, to ensure page stability
+            try:
+                self.dynamic_scraper.page.wait_for_load_state("networkidle", timeout=10000)
+                if self.verbose:
+                    logging.debug("Page network is idle.")
+            except PlaywrightTimeoutError:
+                logging.warning(f"Timeout waiting for network idle on {url}. Proceeding anyway.")
+            except Exception as e:
+                logging.warning(f"Error waiting for network idle on {url}: {e}")
+
+            # Get the full HTML content after all interactions and stabilization
+            html_content = None
+            for i in range(3): # Retry content retrieval a few times
+                try:
+                    html_content = self.dynamic_scraper.page.content()
+                    if html_content:
+                        break
+                    else:
+                        logging.warning(f"Attempt {i+1} to get page content returned empty. Retrying...")
+                        self.dynamic_scraper.page.wait_for_timeout(1000) # Small delay before retry
+                except PlaywrightTimeoutError:
+                    logging.warning(f"Timeout getting page content (attempt {i+1}). Retrying...")
+                    self.dynamic_scraper.page.wait_for_timeout(1000)
+                except Exception as e:
+                    logging.warning(f"Error getting page content (attempt {i+1}): {e}. Retrying...")
+                    self.dynamic_scraper.page.wait_for_timeout(1000)
+
+            if not html_content:
+                logging.error(f"Failed to retrieve page content after multiple attempts for {url}.")
+                return all_links # Return what we have, even if no content
+
+            soup = BeautifulSoup(html_content, 'html.parser')
+
             # Extract links from the fully rendered page
             try:
                 rendered_links = self.dynamic_scraper.extract_links(url)
@@ -2131,14 +2239,10 @@ class Siphon:
             except Exception as e:
                 logging.error(f"Error dynamically extracting links from {url}: {e}")
 
-            # Find and click elements that might trigger downloads
-            try:
-                discovered_downloads = self.dynamic_scraper.find_and_click_downloads(self.download_extensions)
-                if discovered_downloads:
-                    all_links.update(discovered_downloads)
-                    logging.info(f"Found {len(discovered_downloads)} downloads via dynamic interaction")
-            except Exception as e:
-                logging.error(f"Error dynamically clicking download elements on {url}: {e}")
+            # The logic to find data-download attributes and process them is now handled
+            # within find_and_click_downloads, so this block can be removed or simplified
+            # if it's no longer needed for other purposes.
+            # For now, removing the redundant data-download parsing here.
             
             return all_links
             
@@ -2198,29 +2302,21 @@ class Siphon:
             
             # Check if we got a valid URL
             if not url_info:
-                try:
-                    self.url_queue.task_done()
-                except ValueError:
-                    pass
                 continue
             
             try:
                 # Check if we should process this URL
                 with self.visited_lock:
                     if url in self.visited_urls:
-                        self.url_queue.task_done()
                         continue
                     
                     if self.max_urls is not None and len(self.visited_urls) >= self.max_urls:
-                        self.url_queue.task_done()
                         continue
                         
                     if depth > self.max_depth:
-                        self.url_queue.task_done()
                         continue
                         
                     if not self.should_crawl_url(url):
-                        self.url_queue.task_done()
                         continue
                         
                     self.visited_urls.add(url)
@@ -2234,7 +2330,7 @@ class Siphon:
                 # Phase 1: Static scrape attempt (if not in 'always' dynamic mode)
                 html_content = None
                 if self.dynamic_mode != 'always':
-                html_content = self.fetch_url(url)
+                    html_content = self.fetch_url(url)
                 
                 # Phase 2: Process static results or decide to use dynamic
                 if html_content:
@@ -2246,23 +2342,25 @@ class Siphon:
                     # If static scrape found files, we might not need dynamic
                     target_files_found = self.filter_target_files(static_links)
                     if target_files_found and self.dynamic_mode == 'auto':
-                        if self.verbose: print(f"    -> Static found target files, skipping dynamic mode")
+                        if self.verbose:
+                            print(f"    -> Static found target files, skipping dynamic mode")
                         # We have what we need, can skip dynamic.
                     elif self.dynamic_mode == 'auto':
-                         # Static worked but found nothing useful, try dynamic
-                         if self.verbose: print(f"    -> Static found no targets, trying Dynamic mode...")
-                    dynamic_links = self.dynamic_scrape(url)
-                         if dynamic_links:
-                             links.update(dynamic_links)
+                        # Static worked but found nothing useful, try dynamic
+                        if self.verbose:
+                            print(f"    -> Static found no targets, trying Dynamic mode...")
+                        dynamic_links = self.dynamic_scrape(url)
+                        if dynamic_links:
+                            links.update(dynamic_links)
 
                 # Phase 3: Use dynamic if static failed (in auto) or forced (in always)
                 elif self.dynamic_mode in ['auto', 'always']:
-                        if self.verbose:
+                    if self.verbose:
                         if self.dynamic_mode == 'auto':
                             print(f"    -> Static fetch failed, falling back to Dynamic mode...")
-                        else: # always
+                        else:  # always
                             print(f"    -> Using Dynamic mode as requested...")
-                            
+                    
                     dynamic_links = self.dynamic_scrape(url)
                     if dynamic_links:
                         links.update(dynamic_links)
@@ -2291,23 +2389,20 @@ class Siphon:
                 
                 # Show summary - only show meaningful progress
                 if files_downloaded > 0:
-                    print(f"    -> Downloaded {files_downloaded} file(s) from page.")
+                    logging.info(f"Downloaded {files_downloaded} file(s) from page.")
                 elif self.verbose:
                     if new_crawl_urls > 0:
-                        print(f"    -> Added {new_crawl_urls} URLs to crawl queue")
+                        logging.info(f"Added {new_crawl_urls} URLs to crawl queue")
                     if len(potential_files) > 0 and not self.crawl_only:
-                        print(f"    -> Found {len(potential_files)} potential files but none were ultimately downloaded")
+                        logging.info(f"Found {len(potential_files)} potential files but none were ultimately downloaded")
                 
                 if self.delay > 0:
                     time.sleep(self.delay)
                     
             except Exception as e:
                 if self.verbose:
-                    print(f"    ERROR: {str(e)}")
+                    logging.error(f"ERROR: {str(e)}")
                 logging.error(f"Error processing {url}: {str(e)}")
-            finally:
-                # Always call task_done() exactly once per item
-                self.url_queue.task_done()
     
     def __enter__(self):
         return self
@@ -2349,17 +2444,27 @@ class Siphon:
         """
         Determine if a URL points to a file that should be downloaded.
         """
+        logging.debug(f"should_download_file: Checking {url}")
         if not url:
+            logging.debug(f"should_download_file: URL is empty, returning False")
             return False
         if self.crawl_only:
+            logging.debug(f"should_download_file: crawl_only is True, returning False")
             return False
             
         # For playbooks.com, treat rule pages as downloadable content
         if 'playbooks.com/rules/' in url and not url.endswith('/'):
+            logging.debug(f"should_download_file: Matched playbooks.com rule, returning True")
+            return True
+            
+        # Specific fix for vsthemes.org d.php links that serve zip files
+        if 'vsthemes.org/d.php?id=' in url and 'zip' in self.download_extensions:
+            logging.debug(f"should_download_file: Matched vsthemes.org d.php link for zip, returning True")
             return True
             
         # Check file:/// URLs from dynamic scraper (they're captured downloads)
         if url.startswith('file:///'):
+            logging.debug(f"should_download_file: URL is file:///, processing as captured download")
             try:
                 parsed_url = urllib.parse.urlparse(url)
                 path = parsed_url.path
@@ -2367,14 +2472,18 @@ class Siphon:
                 # Treat .mdc files as .md files for compatibility
                 if ext == 'mdc':
                     ext = 'md'
+                logging.debug(f"should_download_file: File URI extension: {ext}, download_extensions: {self.download_extensions}")
                 if ext and self.download_extensions:
                     return ext in self.download_extensions
+                logging.debug(f"should_download_file: No extension filtering for file URI, returning True")
                 return True  # If no extension filtering, download it
-            except:
+            except Exception as e:
+                logging.debug(f"should_download_file: Error processing file URI: {e}, returning True")
                 return True
             
         # Check blob: URLs from dynamic scraper
         if url.startswith('blob:'):
+            logging.debug(f"should_download_file: URL is blob:, processing as captured download")
             try:
                 # Extract filename from blob URL format: blob:filename:base64content
                 parts = url.split(':', 2)
@@ -2384,10 +2493,13 @@ class Siphon:
                     # Treat .mdc files as .md files for compatibility
                     if ext == 'mdc':
                         ext = 'md'
+                    logging.debug(f"should_download_file: Blob URI extension: {ext}, download_extensions: {self.download_extensions}")
                     if ext and self.download_extensions:
                         return ext in self.download_extensions
+                logging.debug(f"should_download_file: No extension filtering for blob URI, returning True")
                 return True  # If no extension filtering, download it
-            except:
+            except Exception as e:
+                logging.debug(f"should_download_file: Error processing blob URI: {e}, returning True")
                 return True
             
         try:
@@ -2397,14 +2509,20 @@ class Siphon:
             # Treat .mdc files as .md files for compatibility
             if ext == 'mdc':
                 ext = 'md'
-        except:
+            logging.debug(f"should_download_file: Regular URL extension: {ext}, download_extensions: {self.download_extensions}")
+        except Exception as e:
+            logging.debug(f"should_download_file: Error parsing URL for extension: {e}, returning False")
             return False
         if not ext:
+            logging.debug(f"should_download_file: No extension found, returning False")
             return False
         if self.exclude_extensions and ext in self.exclude_extensions:
+            logging.debug(f"should_download_file: Extension {ext} is in exclude_extensions, returning False")
             return False
         if self.download_extensions:
+            logging.debug(f"should_download_file: Checking if {ext} is in {self.download_extensions}")
             return ext in self.download_extensions
+        logging.debug(f"should_download_file: No download_extensions specified, returning False")
         return False
 
     def fetch_url(self, url, max_retries=3):
@@ -2444,15 +2562,9 @@ class Siphon:
                 last_exception = e_http
                 # Log 4xx client errors as warnings, not critical errors
                 if 400 <= e_http.response.status_code < 500:
-                    if self.verbose:
-                        logging.warning(f"Client error {e_http.response.status_code} fetching {url}: {e_http.response.reason}")
-                    else:
-                        logging.warning(f"Client error {e_http.response.status_code} fetching {url}: {e_http.response.reason}")
+                    logging.warning(f"Client error {e_http.response.status_code} fetching {url}: {e_http.response.reason}")
                 else:
-                    if self.verbose:
-                        logging.error(f"HTTP server error {e_http.response.status_code} fetching {url}: {e_http.response.reason}")
-                    else:
-                        logging.error(f"HTTP server error {e_http.response.status_code} fetching {url}: {e_http.response.reason}")
+                    logging.error(f"HTTP server error {e_http.response.status_code} fetching {url}: {e_http.response.reason}")
                 if self.proxy_manager and hasattr(self.proxy_manager, 'mark_proxy_failed') and proxy_to_use:
                     self.proxy_manager.mark_proxy_failed(proxy_to_use)
                 break  # Don't retry HTTP errors
@@ -2462,34 +2574,22 @@ class Siphon:
                 if self.proxy_manager and hasattr(self.proxy_manager, 'mark_proxy_failed') and proxy_to_use:
                     self.proxy_manager.mark_proxy_failed(proxy_to_use)
                 if attempt < max_retries - 1:
-                    if self.verbose:
-                        logging.warning(f"Connection error fetching {url} (attempt {attempt + 1}/{max_retries}): {e_conn}")
-                    else:
-                        logging.warning(f"Connection error fetching {url} (attempt {attempt + 1}/{max_retries}): Connection failed")
+                    logging.warning(f"Connection error fetching {url} (attempt {attempt + 1}/{max_retries}): {e_conn}")
                     time.sleep(0.5)  # Shorter delay for faster proxy rotation
                     continue
                 else:
-                    if self.verbose:
-                        logging.error(f"Connection error fetching {url} (final attempt): {e_conn}")
-                    else:
-                        logging.error(f"Connection error fetching {url} (final attempt): Connection failed")
+                    logging.error(f"Connection error fetching {url} (final attempt): {e_conn}")
                         
             except requests.exceptions.RequestException as e_req:
                 last_exception = e_req
-                if self.verbose:
-                    logging.error(f"Request error fetching {url}: {e_req}")
-                else:
-                    logging.error(f"Request error fetching {url}: Request failed")
+                logging.error(f"Request error fetching {url}: {e_req}")
                 if self.proxy_manager and hasattr(self.proxy_manager, 'mark_proxy_failed') and proxy_to_use:
                     self.proxy_manager.mark_proxy_failed(proxy_to_use)
                 break  # Don't retry other request exceptions
                 
             except Exception as e_gen:
                 last_exception = e_gen
-                if self.verbose:
-                    logging.error(f"General error fetching {url}: {e_gen}")
-                else:
-                    logging.error(f"General error fetching {url}: Unexpected error")
+                logging.error(f"General error fetching {url}: {e_gen}")
                 break  # Don't retry general exceptions
                 
         return None
@@ -2630,7 +2730,6 @@ class Siphon:
                         with open(file_path, 'w', encoding='utf-8') as f:
                             f.write(markdown_content)
                         
-                        print(f"    + {safe_filename}")
                         logging.info(f"SUCCESS: Saved rule content to {file_path}")
                         self.downloaded_files.add(url)
                         self.discovered_files.add(url)
@@ -2661,7 +2760,6 @@ class Siphon:
                 with open(file_path, 'wb') as f:
                     f.write(content)
                 
-                print(f"    + {safe_filename}")
                 logging.info(f"SUCCESS: Saved blob content to {file_path}")
                 self.downloaded_files.add(url) # Use blob URI as the unique identifier
                 self.discovered_files.add(url)
@@ -2698,7 +2796,6 @@ class Siphon:
                 if os.path.exists(local_path):
                     with open(local_path, 'rb') as src, open(file_path, 'wb') as dst:
                         dst.write(src.read())
-                    print(f"    + {safe_filename}")
                     logging.info(f"SUCCESS: Copied file from {local_path} to {file_path}")
                 else:
                     logging.warning(f"Local file not found: {local_path}")
@@ -2764,12 +2861,9 @@ class Siphon:
 
             with open(filepath, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
-                    if chunk: 
+                    if chunk:
                         f.write(chunk)
             
-            print(f"    + {filename}")
-            self.downloaded_files.add(url)
-            self.discovered_files.add(url) 
             logging.info(f"Successfully downloaded: {filepath} (from {url})")
 
         except requests.exceptions.HTTPError as e_http:
@@ -2838,17 +2932,15 @@ def main():
         return
         
     # Configure logging
-    log_level = logging.WARNING
+    # Configure logging based on arguments
+    # The Siphon class will reconfigure logging with its own handlers,
+    # so this initial basicConfig is mainly for messages before Siphon is initialized.
     if args.verbose:
-        log_level = logging.INFO
-    if args.quiet:
-        log_level = logging.ERROR
-        
-    logging.basicConfig(
-        level=log_level,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
-    )
+        logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    elif args.quiet:
+        logging.basicConfig(level=logging.ERROR, format="%(asctime)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    else:
+        logging.basicConfig(level=logging.WARNING, format="%(asctime)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
     
     # Print logo
     if not args.quiet:
@@ -2926,7 +3018,7 @@ def main():
         dynamic_mode=args.dynamic,
         test_proxies_on_start=args.test_proxies,
         max_threads=args.threads,
-        verbose=args.verbose
+        verbose=args.verbose # Set verbose to True by default for debugging
     )
     
     try:

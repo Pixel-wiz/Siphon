@@ -88,4 +88,8 @@ docs/_build/
 *.backup
 
 # Documentation files (keep private)
-*.md
+ARCHITECTURE.md
+PROJECT_STATUS.md
+COMPREHENSIVE_TEST_REPORT.md
+DELIVERY_REPORT.md
+IMPLEMENTATION_PLAN.md

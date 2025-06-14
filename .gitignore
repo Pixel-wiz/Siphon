@@ -87,9 +87,6 @@ docs/_build/
 *.bak
 *.backup
 
-# Documentation files (keep private)
-ARCHITECTURE.md
-PROJECT_STATUS.md
-COMPREHENSIVE_TEST_REPORT.md
-DELIVERY_REPORT.md
-IMPLEMENTATION_PLAN.md
+# Documentation files (only README.md should be public)
+*.md
+!README.md

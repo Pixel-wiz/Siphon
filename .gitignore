@@ -1,13 +1,14 @@
 # Python
 __pycache__/
 *.py[cod]
+*.pyo
+*.pyd
 *$py.class
 *.so
 .Python
 build/
 develop-eggs/
 dist/
-downloads/
 eggs/
 .eggs/
 lib/
@@ -24,6 +25,7 @@ MANIFEST
 
 # Virtual environments
 .env
+.env.local
 .venv
 env/
 venv/
@@ -31,14 +33,12 @@ ENV/
 env.bak/
 venv.bak/
 
-# IDE
+# IDE and Editor files
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-
-# OS
 .DS_Store
 .DS_Store?
 ._*
@@ -53,19 +53,12 @@ downloads/
 temp/
 tmp/
 
-# Example files and test data
-example.txt
-examples/
-test_*.py
-*_test.py
-tests/
-
 # Proxy files
 proxies.txt
 proxy_list.txt
 *.proxy
 
-# Log files
+# Log files and debug output
 *.log
 logs/
 
@@ -78,7 +71,7 @@ logs/
 *.ipynb
 .ipynb_checkpoints/
 
-# Coverage reports
+# Coverage reports and test output
 htmlcov/
 .coverage
 .coverage.*
@@ -93,9 +86,3 @@ docs/_build/
 # Backup files
 *.bak
 *.backup
-*~
-
-# Local configuration
-config.local.*
-.env.local
-settings.local.* 

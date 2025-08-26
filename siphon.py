@@ -628,7 +628,8 @@ class ProxyManager:
         with self.proxy_lock:
             if proxy in self.proxies:
                 self.proxies.remove(proxy)
-                self.failed_proxies.add(proxy)
+                proxy_key = self._get_proxy_key(proxy)
+                self.failed_proxies.add(proxy_key)
                 
                 # Clean up thread assignments using this proxy
                 threads_to_reassign = [tid for tid, p in self.thread_assignments.items() if p == proxy]

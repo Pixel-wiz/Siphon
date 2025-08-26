@@ -71,15 +71,55 @@ def signal_handler(sig, frame):
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
+# Real browser user agents - updated regularly to avoid detection
 USER_AGENTS = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/91.0.864.59',
-    'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:89.0) Gecko/20100101 Firefox/89.0',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Edg/91.0.864.59'
+    # Chrome on Windows 11 (Latest versions)
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+    
+    # Chrome on macOS (Latest)
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+    
+    # Safari on macOS (Latest)
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15',
+    
+    # Firefox on Windows (Latest)
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:131.0) Gecko/20100101 Firefox/131.0',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:130.0) Gecko/20100101 Firefox/130.0',
+    
+    # Firefox on macOS
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 14.7; rv:132.0) Gecko/20100101 Firefox/132.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 14.6; rv:131.0) Gecko/20100101 Firefox/131.0',
+    
+    # Firefox on Linux
+    'Mozilla/5.0 (X11; Linux x86_64; rv:132.0) Gecko/20100101 Firefox/132.0',
+    'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:131.0) Gecko/20100101 Firefox/131.0',
+    
+    # Edge on Windows (Latest)
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0',
+    
+    # Chrome on Linux
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+    
+    # Mobile browsers for variety
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Mobile/15E148 Safari/604.1',
+    'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36',
+    'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36',
+    
+    # Less common but legitimate browsers
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 OPR/117.0.0.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 OPR/116.0.0.0',
 ]
 
 API_PATTERNS = [
@@ -364,6 +404,14 @@ class ProxyManager:
         self.all_failed_warned = False
         self.original_proxy_count = 0
         
+        # Enhanced rotation tracking
+        self.proxy_usage_stats = {}  # Track success/failure per proxy
+        self.proxy_last_used = {}    # Track when proxy was last used
+        self.proxy_response_times = {}  # Track average response times
+        self.rotation_strategy = 'intelligent'  # 'round_robin', 'performance', 'intelligent'
+        self.max_failures_per_proxy = 3
+        self.proxy_cooldown_time = 30  # seconds between reusing same proxy
+        
         if proxy_list:
             self.load_proxies(proxy_list)
     
@@ -430,35 +478,150 @@ class ProxyManager:
         logging.info(f"Found {len(self.proxies)} working proxies")
     
     def get_proxy(self, thread_id, url=None):
-        """Get a working proxy for the given thread and URL"""
+        """Get a working proxy using intelligent rotation strategy"""
         with self.proxy_lock:
             if not self.proxies:
-                # Only show warning if we actually had proxies configured initially
                 if not self.all_failed_warned and self.original_proxy_count > 0:
                     print(f"WARNING: All {self.original_proxy_count} proxies have failed, switching to direct connection")
                     self.all_failed_warned = True
                 return None
             
-            # Try to get an untried proxy for this URL first
-            if url:
-                untried_proxy = self.get_untried_proxy_for_url(url)
-                if untried_proxy:
-                    self.thread_assignments[thread_id] = untried_proxy
-                    return untried_proxy
+            current_time = time.time()
+            available_proxies = []
             
-            # Round-robin assignment if no specific URL or no untried proxy
-            if thread_id not in self.thread_assignments or self.thread_assignments[thread_id] not in self.proxies:
-                if self.proxies:
-                    # Assign next available proxy
-                    self.current_proxy_index = (self.current_proxy_index) % len(self.proxies)
-                    assigned_proxy = self.proxies[self.current_proxy_index]
-                    self.thread_assignments[thread_id] = assigned_proxy
-                    self.current_proxy_index += 1
-                    return assigned_proxy
+            # Filter out failed proxies and those in cooldown
+            for proxy in self.proxies:
+                proxy_key = self._get_proxy_key(proxy)
+                
+                # Skip if proxy has failed too many times
+                if proxy_key in self.proxy_usage_stats:
+                    failures = self.proxy_usage_stats[proxy_key].get('failures', 0)
+                    if failures >= self.max_failures_per_proxy:
+                        continue
+                
+                # Skip if proxy is in cooldown
+                if proxy_key in self.proxy_last_used:
+                    time_since_use = current_time - self.proxy_last_used[proxy_key]
+                    if time_since_use < self.proxy_cooldown_time:
+                        continue
+                
+                available_proxies.append(proxy)
+            
+            if not available_proxies:
+                # Reset cooldowns if no proxies available
+                self.proxy_last_used.clear()
+                available_proxies = []
+                for p in self.proxies:
+                    proxy_key = self._get_proxy_key(p)
+                    if proxy_key not in self.failed_proxies:
+                        available_proxies.append(p)
+            
+            if not available_proxies:
+                return None
+            
+            # Select proxy based on strategy
+            selected_proxy = self._select_proxy_by_strategy(available_proxies)
+            
+            if selected_proxy:
+                proxy_key = self._get_proxy_key(selected_proxy)
+                self.proxy_last_used[proxy_key] = current_time
+                self.thread_assignments[thread_id] = selected_proxy
+                return selected_proxy
+            
+            return None
+    
+    def _get_proxy_key(self, proxy):
+        """Get a unique key for proxy tracking"""
+        if isinstance(proxy, dict):
+            return proxy.get('http', proxy.get('https', ''))
+        return str(proxy)
+    
+    def _select_proxy_by_strategy(self, available_proxies):
+        """Select proxy based on rotation strategy"""
+        if not available_proxies:
+            return None
+            
+        if self.rotation_strategy == 'round_robin':
+            # Simple round robin
+            self.current_proxy_index = (self.current_proxy_index + 1) % len(available_proxies)
+            return available_proxies[self.current_proxy_index]
+            
+        elif self.rotation_strategy == 'performance':
+            # Select based on best performance
+            def get_performance_score(proxy):
+                proxy_key = self._get_proxy_key(proxy)
+                if proxy_key not in self.proxy_response_times:
+                    return 999  # Unknown performance, deprioritize
+                return self.proxy_response_times[proxy_key]
+            
+            return min(available_proxies, key=get_performance_score)
+            
+        else:  # intelligent strategy
+            # Combine performance and usage stats
+            def get_intelligent_score(proxy):
+                proxy_key = self._get_proxy_key(proxy)
+                
+                # Base score on response time (lower is better)
+                response_time = self.proxy_response_times.get(proxy_key, 5.0)
+                
+                # Factor in success rate
+                if proxy_key in self.proxy_usage_stats:
+                    stats = self.proxy_usage_stats[proxy_key]
+                    success_rate = stats.get('successes', 0) / max(stats.get('total', 1), 1)
+                    # Penalize proxies with low success rates
+                    response_time *= (2.0 - success_rate)
+                
+                # Add randomness to avoid always picking the same proxy
+                response_time *= random.uniform(0.8, 1.2)
+                
+                return response_time
+            
+            return min(available_proxies, key=get_intelligent_score)
+    
+    def record_proxy_success(self, proxy, response_time=None):
+        """Record successful proxy usage"""
+        if not proxy:
+            return
+            
+        proxy_key = self._get_proxy_key(proxy)
+        
+        with self.proxy_lock:
+            # Update usage stats
+            if proxy_key not in self.proxy_usage_stats:
+                self.proxy_usage_stats[proxy_key] = {'successes': 0, 'failures': 0, 'total': 0}
+            
+            self.proxy_usage_stats[proxy_key]['successes'] += 1
+            self.proxy_usage_stats[proxy_key]['total'] += 1
+            
+            # Update response times
+            if response_time is not None:
+                if proxy_key not in self.proxy_response_times:
+                    self.proxy_response_times[proxy_key] = response_time
                 else:
-                    return None
+                    # Running average
+                    current_avg = self.proxy_response_times[proxy_key]
+                    self.proxy_response_times[proxy_key] = (current_avg + response_time) / 2
+    
+    def record_proxy_failure(self, proxy):
+        """Record failed proxy usage"""
+        if not proxy:
+            return
             
-            return self.thread_assignments[thread_id]
+        proxy_key = self._get_proxy_key(proxy)
+        
+        with self.proxy_lock:
+            # Update usage stats
+            if proxy_key not in self.proxy_usage_stats:
+                self.proxy_usage_stats[proxy_key] = {'successes': 0, 'failures': 0, 'total': 0}
+            
+            self.proxy_usage_stats[proxy_key]['failures'] += 1
+            self.proxy_usage_stats[proxy_key]['total'] += 1
+            
+            # Mark as failed if too many failures
+            failures = self.proxy_usage_stats[proxy_key]['failures']
+            if failures >= self.max_failures_per_proxy:
+                self.failed_proxies.add(proxy_key)
+                logging.warning(f"Proxy {proxy_key} marked as failed after {failures} failures")
 
     def mark_proxy_failed(self, proxy):
         """Mark a proxy as failed and remove it from the active list"""
@@ -687,6 +850,15 @@ class WebScraper:
                 
                 self.rate_limiter.wait()
                 
+                # Add intelligent delay based on proxy usage
+                if proxy:
+                    proxy_key = self.proxy_manager._get_proxy_key(proxy)
+                    if proxy_key in self.proxy_manager.proxy_last_used:
+                        time_since_last = time.time() - self.proxy_manager.proxy_last_used[proxy_key]
+                        if time_since_last < 1.0:  # Less than 1 second since last use
+                            additional_delay = random.uniform(0.5, 2.0)
+                            time.sleep(additional_delay)
+                
                 if self.use_selenium and hasattr(self, 'driver'):
                     return self._selenium_request(url)
                 
@@ -718,14 +890,18 @@ class WebScraper:
                     
                     self.rate_limiter.adjust(response_time, response.status_code)
                     
+                    # Record successful proxy usage
+                    if proxy:
+                        self.proxy_manager.record_proxy_success(proxy, response_time)
+                    
                     self.cache[cache_key] = robust_response
                     return robust_response
                 else:
                     logging.warning(f"HTTP {response.status_code} for {url}{proxy_info}")
-                    if proxy and attempt < retries - 1:
-                        with self.proxy_manager.proxy_lock:
-                            if thread_id in self.proxy_manager.proxy_counters:
-                                self.proxy_manager.proxy_counters[thread_id]['request_count'] = 0
+                    
+                    # Record proxy failure for non-success status codes
+                    if proxy:
+                        self.proxy_manager.record_proxy_failure(proxy)
                     
             except Exception as e:
                 error_msg = str(e)
@@ -737,6 +913,8 @@ class WebScraper:
                 
                 if is_proxy_error and proxy:
                     logging.warning(f"Proxy error for {url}{proxy_info}: {error_msg}")
+                    # Record proxy failure for connection errors
+                    self.proxy_manager.record_proxy_failure(proxy)
                     if hasattr(self.proxy_manager, 'mark_proxy_failed'):
                         self.proxy_manager.mark_proxy_failed(proxy)
                     with self.proxy_manager.proxy_lock:

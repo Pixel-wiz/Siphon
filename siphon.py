@@ -164,24 +164,51 @@ API_KEY_PATTERNS = [
 ]
 
 DUMP_ALL_EXTENSIONS = [
+    # Documents
     'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'rtf', 'txt', 'csv', 'env',
-    
+
+    # Images - Traditional & Modern
     'jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'webp', 'ico', 'tiff', 'tif',
-    
-    'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv', 'mpg', 'mpeg',
-    
-    'mp3', 'wav', 'flac', 'aac', 'ogg', 'wma', 'm4a',
-    
-    'zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz',
-    
+    'avif', 'heic', 'heif', 'raw', 'cr2', 'nef', 'arw', 'dng', 'orf',
+
+    # Videos - Traditional & Modern
+    'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv', 'mpg', 'mpeg', 'm4v',
+    '3gp', 'ogv', 'mts', 'm2ts', 'f4v', 'f4p', 'f4a', 'f4b',
+
+    # Audio - Traditional & Modern
+    'mp3', 'wav', 'flac', 'aac', 'ogg', 'wma', 'm4a', 'opus',
+    'aiff', 'au', 'ra', 'ape', 'ac3', 'dts', 'amr', 'gsm',
+
+    # Archives & Compressed
+    'zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'lz', 'lzma', 'zst',
+    'deb', 'rpm', 'dmg', 'iso', 'cab', 'arj', 'lzh', 'lha',
+
+    # Code & Config
     'js', 'css', 'json', 'xml', 'yaml', 'yml', 'ini', 'conf', 'config', 'env',
     'py', 'php', 'java', 'cpp', 'c', 'h', 'cs', 'rb', 'go', 'rs', 'swift',
-    
-    'sql', 'db', 'sqlite', 'mdb',
-    
-    'log', 'bak', 'backup', 'old', 'temp', 'tmp', 'cache',
-    
-    'html', 'htm', 'php', 'asp', 'aspx', 'jsp', 'do', 'action'
+    'kt', 'scala', 'clj', 'hs', 'ml', 'fs', 'elm', 'dart', 'lua', 'r',
+
+    # Data & Databases
+    'sql', 'db', 'sqlite', 'mdb', 'accdb', 'dbf', 'csv', 'tsv', 'parquet',
+
+    # System & Backup
+    'log', 'bak', 'backup', 'old', 'temp', 'tmp', 'cache', 'swp', 'lock',
+
+    # Web & Templates
+    'html', 'htm', 'php', 'asp', 'aspx', 'jsp', 'do', 'action',
+    'ejs', 'hbs', 'mustache', 'twig', 'jade', 'pug',
+
+    # Fonts
+    'ttf', 'otf', 'woff', 'woff2', 'eot',
+
+    # 3D & CAD
+    'obj', 'fbx', 'dae', '3ds', 'blend', 'stl', 'ply', 'gltf', 'glb',
+
+    # Scientific & Data
+    'nc', 'hdf', 'hdf5', 'mat', 'rdata', 'pickle', 'pkl', 'joblib',
+
+    # Other
+    'exe', 'dll', 'so', 'dylib', 'app', 'pkg', 'msi'
 ]
 
 class RobustResponse:
@@ -876,7 +903,7 @@ class WebScraper:
                 pattern = re.compile(keyword, re.IGNORECASE)
                 matches = pattern.findall(text)
                 extracted.extend(matches)
-            except:
+            except (AttributeError, TypeError):
                 if keyword.lower() in text.lower():
                     extracted.append(keyword)
         
@@ -967,7 +994,139 @@ class WebScraper:
         if twitter_tags:
             structured['twitter_card'] = twitter_tags
         
+        # Extract e-commerce product data
+        products = self.extract_ecommerce_products(soup)
+        if products:
+            structured['products'] = products
+            
+        # Extract table data
+        tables = self.extract_table_data(soup)
+        if tables:
+            structured['tables'] = tables
+        
         return structured
+    
+    def extract_ecommerce_products(self, soup):
+        """Extract product information from e-commerce pages"""
+        products = []
+        
+        # Common product selectors for webscraper.io test sites
+        product_selectors = [
+            '.product-wrapper',
+            '.thumbnail',
+            '.product',
+            '[class*="product"]',
+            '.item',
+            '[data-product]'
+        ]
+        
+        product_elements = []
+        for selector in product_selectors:
+            elements = soup.select(selector)
+            if elements:
+                product_elements = elements
+                break
+        
+        for element in product_elements:
+            product = {}
+            
+            # Extract product title/name
+            title_selectors = [
+                '.title', 'h1', 'h2', 'h3', 'h4', '.product-title', 
+                '.name', '[class*="title"]', '[class*="name"]', 'a[title]'
+            ]
+            
+            for selector in title_selectors:
+                title_elem = element.select_one(selector)
+                if title_elem:
+                    product['title'] = title_elem.get_text().strip() or title_elem.get('title', '').strip()
+                    break
+            
+            # Extract price
+            price_selectors = [
+                '.price', '.cost', '[class*="price"]', '[data-price]',
+                '.caption h4', 'h4'
+            ]
+            
+            for selector in price_selectors:
+                price_elem = element.select_one(selector)
+                if price_elem:
+                    price_text = price_elem.get_text().strip()
+                    if '$' in price_text or price_text.replace('.','').replace(',','').isdigit():
+                        product['price'] = price_text
+                        break
+            
+            # Extract description/specs
+            desc_selectors = [
+                '.description', '.specs', '.caption p', 'p',
+                '[class*="desc"]', '[class*="spec"]'
+            ]
+            
+            for selector in desc_selectors:
+                desc_elem = element.select_one(selector)
+                if desc_elem:
+                    desc_text = desc_elem.get_text().strip()
+                    if len(desc_text) > 10:  # Avoid empty or very short descriptions
+                        product['description'] = desc_text
+                        break
+            
+            # Extract ratings/reviews
+            review_selectors = [
+                '[class*="review"]', '[class*="rating"]', '.stars',
+                'small', '[class*="star"]'
+            ]
+            
+            for selector in review_selectors:
+                review_elem = element.select_one(selector)
+                if review_elem:
+                    review_text = review_elem.get_text().strip()
+                    if 'review' in review_text.lower():
+                        product['reviews'] = review_text
+                        break
+            
+            # Extract image URL
+            img_elem = element.select_one('img')
+            if img_elem:
+                product['image'] = img_elem.get('src', '')
+            
+            # Extract product URL
+            link_elem = element.select_one('a')
+            if link_elem:
+                product['url'] = link_elem.get('href', '')
+            
+            # Only add product if we found at least title or price
+            if product.get('title') or product.get('price'):
+                products.append(product)
+        
+        return products
+    
+    def extract_table_data(self, soup):
+        """Extract data from HTML tables"""
+        tables = []
+        
+        for table in soup.find_all('table'):
+            table_data = {
+                'headers': [],
+                'rows': []
+            }
+            
+            # Extract headers
+            headers = table.find_all(['th', 'td'])[:10]  # Limit to avoid huge tables
+            if headers:
+                table_data['headers'] = [h.get_text().strip() for h in headers]
+            
+            # Extract rows
+            rows = table.find_all('tr')[1:11]  # Skip header row, limit to 10 rows
+            for row in rows:
+                cells = row.find_all(['td', 'th'])
+                if cells:
+                    row_data = [cell.get_text().strip() for cell in cells]
+                    table_data['rows'].append(row_data)
+            
+            if table_data['headers'] or table_data['rows']:
+                tables.append(table_data)
+        
+        return tables
     
     def scrape_page(self, url):
         
@@ -1071,6 +1230,9 @@ class WebScraper:
         
         data['links'] = self.extract_links(soup, url)
         
+        # Save structured data if products or tables were found
+        self._save_structured_data(data)
+        
         if should_process and not self.crawl_only:
             self._save_file(url, response.content)
         elif should_process and self.crawl_only:
@@ -1087,6 +1249,83 @@ class WebScraper:
                 self.discovered_files.append(file_info)
         
         return data
+    
+    def _save_structured_data(self, data):
+        """Save extracted structured data to JSON and CSV files"""
+        try:
+            structured_data = data.get('structured_data', {})
+            
+            # Save products data
+            if 'products' in structured_data and structured_data['products']:
+                products = structured_data['products']
+                
+                # Save as JSON
+                products_json_path = os.path.join(self.domain_dir, 'products.json')
+                existing_products = []
+                if os.path.exists(products_json_path):
+                    try:
+                        with open(products_json_path, 'r', encoding='utf-8') as f:
+                            existing_products = json.load(f)
+                    except:
+                        existing_products = []
+                
+                # Add URL info to each product
+                for product in products:
+                    product['source_url'] = data['url']
+                    product['extracted_at'] = data['timestamp']
+                
+                existing_products.extend(products)
+                
+                with open(products_json_path, 'w', encoding='utf-8') as f:
+                    json.dump(existing_products, f, indent=2, ensure_ascii=False)
+                
+                # Save as CSV
+                products_csv_path = os.path.join(self.domain_dir, 'products.csv')
+                file_exists = os.path.exists(products_csv_path)
+                
+                with open(products_csv_path, 'a', newline='', encoding='utf-8') as f:
+                    if products:
+                        fieldnames = ['title', 'price', 'description', 'reviews', 'image', 'url', 'source_url', 'extracted_at']
+                        writer = csv.DictWriter(f, fieldnames=fieldnames)
+                        
+                        if not file_exists:
+                            writer.writeheader()
+                        
+                        for product in products:
+                            # Ensure all fields exist
+                            row = {field: product.get(field, '') for field in fieldnames}
+                            writer.writerow(row)
+                
+                logging.info(f"Saved {len(products)} products from {data['url']}")
+            
+            # Save tables data
+            if 'tables' in structured_data and structured_data['tables']:
+                tables = structured_data['tables']
+                
+                # Save as JSON
+                tables_json_path = os.path.join(self.domain_dir, 'tables.json')
+                existing_tables = []
+                if os.path.exists(tables_json_path):
+                    try:
+                        with open(tables_json_path, 'r', encoding='utf-8') as f:
+                            existing_tables = json.load(f)
+                    except:
+                        existing_tables = []
+                
+                table_data = {
+                    'source_url': data['url'],
+                    'extracted_at': data['timestamp'],
+                    'tables': tables
+                }
+                existing_tables.append(table_data)
+                
+                with open(tables_json_path, 'w', encoding='utf-8') as f:
+                    json.dump(existing_tables, f, indent=2, ensure_ascii=False)
+                
+                logging.info(f"Saved {len(tables)} tables from {data['url']}")
+        
+        except Exception as e:
+            logging.error(f"Error saving structured data: {e}")
     
     def _save_file(self, url, content):
         
@@ -1541,6 +1780,101 @@ class DynamicScraper:
             logging.debug(f"Bot protection handling failed: {e}")
         
         return False
+    
+    def handle_pagination_and_clicks(self, click_elements=None):
+        """Handle pagination and dynamic content loading for test sites"""
+        if not self.page:
+            return False
+            
+        try:
+            # Handle pagination for webscraper.io test sites
+            pagination_selectors = [
+                'a[aria-label="Next"]',
+                '.next',
+                '[class*="next"]',
+                'a:has-text("Next")',
+                'button:has-text("Next")',
+                '.pagination a:last-child',
+                'a[rel="next"]'
+            ]
+            
+            load_more_selectors = [
+                'button:has-text("Load more")',
+                '.load-more',
+                '[class*="load-more"]',
+                'button:has-text("Show more")',
+                '.more-button'
+            ]
+            
+            # Try pagination first
+            for selector in pagination_selectors:
+                try:
+                    elements = self.page.locator(selector)
+                    if elements.count() > 0:
+                        element = elements.first
+                        if element.is_visible() and element.is_enabled():
+                            logging.info(f"Found pagination element: {selector}")
+                            element.click(timeout=5000)
+                            self.page.wait_for_timeout(3000)  # Wait for content to load
+                            return True
+                except Exception as e:
+                    logging.debug(f"Pagination selector {selector} failed: {e}")
+                    continue
+            
+            # Try load more buttons
+            for selector in load_more_selectors:
+                try:
+                    elements = self.page.locator(selector)
+                    if elements.count() > 0:
+                        element = elements.first
+                        if element.is_visible() and element.is_enabled():
+                            logging.info(f"Found load more element: {selector}")
+                            element.click(timeout=5000)
+                            self.page.wait_for_timeout(3000)  # Wait for content to load
+                            return True
+                except Exception as e:
+                    logging.debug(f"Load more selector {selector} failed: {e}")
+                    continue
+            
+            # Handle infinite scroll
+            try:
+                # Get current page height
+                initial_height = self.page.evaluate("document.body.scrollHeight")
+                
+                # Scroll to bottom
+                self.page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                self.page.wait_for_timeout(2000)
+                
+                # Check if new content loaded
+                new_height = self.page.evaluate("document.body.scrollHeight")
+                if new_height > initial_height:
+                    logging.info("Successfully triggered infinite scroll")
+                    return True
+                    
+            except Exception as e:
+                logging.debug(f"Infinite scroll failed: {e}")
+            
+            # Handle custom click elements if provided
+            if click_elements:
+                for selector in click_elements.split(','):
+                    try:
+                        selector = selector.strip()
+                        elements = self.page.locator(selector)
+                        if elements.count() > 0:
+                            element = elements.first
+                            if element.is_visible():
+                                logging.info(f"Clicking custom element: {selector}")
+                                element.click(timeout=5000)
+                                self.page.wait_for_timeout(2000)
+                                return True
+                    except Exception as e:
+                        logging.debug(f"Custom click selector {selector} failed: {e}")
+                        continue
+            
+        except Exception as e:
+            logging.error(f"Pagination handling failed: {e}")
+        
+        return False
 
     def find_and_click_downloads(self, download_extensions=None, keywords=None, delay=1.0):
         """
@@ -1938,7 +2272,8 @@ class Siphon:
                  proxy=None, # proxy here is a single string or dict, ProxyManager expects a list
                  crawl_only=False, download_extensions=None, exclude_extensions=None,
                  exclude_urls=None, include_urls=None, custom_parser=None,
-                 dynamic_mode="auto", test_proxies_on_start=False, max_threads=3, verbose=False): # Added test_proxies_on_start, max_threads, and verbose
+                 dynamic_mode="auto", test_proxies_on_start=False, max_threads=3, verbose=False,
+                 click_elements=None): # Added click_elements parameter
 
         self.base_url = base_url
         if not base_url:
@@ -1967,6 +2302,7 @@ class Siphon:
         self.include_urls = [pat.strip() for pat in include_urls if pat.strip()] if isinstance(include_urls, list) else ([pat.strip() for pat in include_urls.split(',') if pat.strip()] if include_urls else [])
         
         self.custom_parser = custom_parser
+        self.click_elements = click_elements
 
         self.visited_urls = set()
         self.discovered_files = set()
@@ -2085,30 +2421,70 @@ class Siphon:
                 pass
             self.dynamic_scraper = None
             
-    def should_use_dynamic_scraping(self, url, static_links=None):
+    def should_use_dynamic_scraping(self, url, static_links=None, static_content=None):
         """Determine if dynamic scraping should be used for this URL"""
         if self.dynamic_mode == "always":
             return True
         elif self.dynamic_mode == "never":
             return False
-            
+
         # In auto mode, check if static scraping found any target files
         if static_links is not None:
             target_files = self.filter_target_files(static_links)
             if target_files:
                 return False  # Static scraping found target files
-                
+
         # Check URL for indicators of dynamic content
         dynamic_indicators = [
-            "react", "vue", "angular", "spa", "single-page", 
+            "react", "vue", "angular", "spa", "single-page",
             "javascript", "js", "ajax", "dynamic"
         ]
-        
+
         url_lower = url.lower()
         for indicator in dynamic_indicators:
             if indicator in url_lower:
                 return True
-                
+
+        # NEW: Analyze static content for dynamic indicators
+        if static_content:
+            content_lower = static_content.lower()
+
+            # Check for common dynamic content patterns
+            dynamic_patterns = [
+                r'<script[^>]*src=[^>]*>',  # External JS files
+                r'<div[^>]*id=["\'][^"\']*react[^"\']*["\']',  # React root elements
+                r'<div[^>]*data-react',  # React data attributes
+                r'window\.__INITIAL_STATE__',  # Common SPA pattern
+                r'window\.__REDUX_STATE__',  # Redux state
+                r'angular\.module',  # Angular modules
+                r'vue\.createApp',  # Vue 3 apps
+                r'new Vue',  # Vue 2 apps
+                r'\.getElementById.*\.innerHTML\s*=',  # Dynamic content insertion
+                r'fetch\s*\(',  # Modern fetch API usage
+                r'\$\.ajax',  # jQuery AJAX calls
+                r'XMLHttpRequest',  # AJAX requests
+                r'document\.write',  # Dynamic document writing
+                r'setTimeout.*function',  # Delayed content loading
+                r'addEventListener.*load',  # Load event handlers
+                r'onload\s*=',  # Load event handlers
+                r'<noscript>',  # Content that requires JS
+                r'<!--\[if[^>]*IE.*\]>',  # Conditional comments that might hide content
+            ]
+
+            # Count dynamic patterns found
+            dynamic_score = 0
+            for pattern in dynamic_patterns:
+                if re.search(pattern, content_lower, re.IGNORECASE | re.DOTALL):
+                    dynamic_score += 1
+
+            # If we find multiple dynamic indicators, use dynamic scraping
+            if dynamic_score >= 3:
+                return True
+
+            # Check for minimal static content (possible lazy loading)
+            if len(static_content.strip()) < 500 and dynamic_score > 0:
+                return True
+
         return False  # Default to static scraping
         
     def dynamic_scrape(self, url):
@@ -2130,6 +2506,16 @@ class Siphon:
                 logging.info(f"Dynamically found {len(rendered_links)} links on: {url}")
             except Exception as e:
                 logging.error(f"Error dynamically extracting links from {url}: {e}")
+
+            # Handle pagination and dynamic content loading
+            try:
+                if self.dynamic_scraper.handle_pagination_and_clicks(self.click_elements):
+                    # Extract additional links after pagination
+                    additional_links = self.dynamic_scraper.extract_links(url)
+                    all_links.update(additional_links)
+                    logging.info(f"Found {len(additional_links)} additional links after pagination")
+            except Exception as e:
+                logging.error(f"Error handling pagination on {url}: {e}")
 
             # Find and click elements that might trigger downloads
             try:
@@ -2234,39 +2620,39 @@ class Siphon:
                 # Phase 1: Static scrape attempt (if not in 'always' dynamic mode)
                 html_content = None
                 if self.dynamic_mode != 'always':
-                html_content = self.fetch_url(url)
-                
+                    html_content = self.fetch_url(url)
+
                 # Phase 2: Process static results or decide to use dynamic
                 if html_content:
                     if self.verbose: print(f"    -> Static fetch OK")
                     soup = self.parse_html(html_content)
                     static_links = self.extract_links(soup, url)
                     links.update(static_links)
-                    
+
                     # If static scrape found files, we might not need dynamic
                     target_files_found = self.filter_target_files(static_links)
                     if target_files_found and self.dynamic_mode == 'auto':
                         if self.verbose: print(f"    -> Static found target files, skipping dynamic mode")
                         # We have what we need, can skip dynamic.
                     elif self.dynamic_mode == 'auto':
-                         # Static worked but found nothing useful, try dynamic
-                         if self.verbose: print(f"    -> Static found no targets, trying Dynamic mode...")
-                    dynamic_links = self.dynamic_scrape(url)
-                         if dynamic_links:
-                             links.update(dynamic_links)
+                        # Static worked but found nothing useful, try dynamic
+                        if self.verbose: print(f"    -> Static found no targets, trying Dynamic mode...")
+                        dynamic_links = self.dynamic_scrape(url)
+                        if dynamic_links:
+                            links.update(dynamic_links)
 
                 # Phase 3: Use dynamic if static failed (in auto) or forced (in always)
                 elif self.dynamic_mode in ['auto', 'always']:
-                        if self.verbose:
+                    if self.verbose:
                         if self.dynamic_mode == 'auto':
                             print(f"    -> Static fetch failed, falling back to Dynamic mode...")
                         else: # always
                             print(f"    -> Using Dynamic mode as requested...")
-                            
+
                     dynamic_links = self.dynamic_scrape(url)
                     if dynamic_links:
                         links.update(dynamic_links)
-                
+
                 else: # static fetch failed and mode is 'never'
                     if self.verbose: print(f"    -> Static fetch failed, dynamic mode disabled.")
 
@@ -2348,16 +2734,17 @@ class Siphon:
     def should_download_file(self, url):
         """
         Determine if a URL points to a file that should be downloaded.
+        Enhanced with MIME type detection for extensionless files.
         """
         if not url:
             return False
         if self.crawl_only:
             return False
-            
+
         # For playbooks.com, treat rule pages as downloadable content
         if 'playbooks.com/rules/' in url and not url.endswith('/'):
             return True
-            
+
         # Check file:/// URLs from dynamic scraper (they're captured downloads)
         if url.startswith('file:///'):
             try:
@@ -2372,7 +2759,7 @@ class Siphon:
                 return True  # If no extension filtering, download it
             except:
                 return True
-            
+
         # Check blob: URLs from dynamic scraper
         if url.startswith('blob:'):
             try:
@@ -2389,23 +2776,130 @@ class Siphon:
                 return True  # If no extension filtering, download it
             except:
                 return True
-            
+
         try:
             parsed_url = urllib.parse.urlparse(url)
             path = parsed_url.path
             ext = os.path.splitext(path)[1].lower().lstrip('.')
+
             # Treat .mdc files as .md files for compatibility
             if ext == 'mdc':
                 ext = 'md'
-        except:
+
+            # If we have an extension, check it against our list
+            if ext:
+                if self.exclude_extensions and ext in self.exclude_extensions:
+                    return False
+                if self.download_extensions:
+                    return ext in self.download_extensions
+                return False
+
+            # NEW: No extension found, try to detect via HEAD request for MIME type
+            if not ext and self.download_extensions:
+                mime_type = self._detect_mime_type(url)
+                if mime_type:
+                    # Map common MIME types to file extensions
+                    mime_to_ext = {
+                        # Documents
+                        'application/pdf': 'pdf',
+                        'application/msword': 'doc',
+                        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+                        'application/vnd.ms-excel': 'xls',
+                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+                        'application/vnd.ms-powerpoint': 'ppt',
+                        'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+
+                        # Images
+                        'image/jpeg': 'jpg',
+                        'image/png': 'png',
+                        'image/gif': 'gif',
+                        'image/svg+xml': 'svg',
+                        'image/webp': 'webp',
+                        'image/avif': 'avif',
+                        'image/heic': 'heic',
+                        'image/heif': 'heif',
+
+                        # Videos
+                        'video/mp4': 'mp4',
+                        'video/webm': 'webm',
+                        'video/ogg': 'ogv',
+                        'video/avi': 'avi',
+                        'video/quicktime': 'mov',
+
+                        # Audio
+                        'audio/mpeg': 'mp3',
+                        'audio/mp4': 'm4a',
+                        'audio/ogg': 'ogg',
+                        'audio/wav': 'wav',
+                        'audio/flac': 'flac',
+                        'audio/opus': 'opus',
+
+                        # Archives
+                        'application/zip': 'zip',
+                        'application/x-rar-compressed': 'rar',
+                        'application/x-7z-compressed': '7z',
+                        'application/gzip': 'gz',
+                        'application/x-tar': 'tar',
+
+                        # Code & Text
+                        'text/plain': 'txt',
+                        'text/html': 'html',
+                        'text/css': 'css',
+                        'application/json': 'json',
+                        'application/javascript': 'js',
+                        'application/xml': 'xml',
+                        'text/xml': 'xml',
+
+                        # Fonts
+                        'font/ttf': 'ttf',
+                        'font/otf': 'otf',
+                        'font/woff': 'woff',
+                        'font/woff2': 'woff2',
+
+                        # Other
+                        'application/octet-stream': None,  # Generic binary, check content
+                    }
+
+                    detected_ext = mime_to_ext.get(mime_type.lower())
+                    if detected_ext:
+                        return detected_ext in self.download_extensions
+
+                    # Special handling for octet-stream - could be anything
+                    if mime_type == 'application/octet-stream':
+                        # Check URL patterns for common extensionless files
+                        if any(pattern in path.lower() for pattern in ['/download', '/file', '/attachment']):
+                            return True  # Download if it looks like a file URL
+
+        except Exception as e:
+            logging.debug(f"Error checking download eligibility for {url}: {e}")
             return False
-        if not ext:
-            return False
-        if self.exclude_extensions and ext in self.exclude_extensions:
-            return False
-        if self.download_extensions:
-            return ext in self.download_extensions
+
         return False
+
+    def _detect_mime_type(self, url, timeout=5):
+        """
+        Detect MIME type of a URL via HEAD request.
+        Returns the content-type header value or None if detection fails.
+        """
+        try:
+            # Use a quick HEAD request to check content type
+            response = self.session.head(
+                url,
+                timeout=timeout,
+                verify=self.verify_ssl,
+                allow_redirects=True
+            )
+
+            if response.status_code == 200:
+                content_type = response.headers.get('content-type', '').split(';')[0].strip()
+                if content_type:
+                    logging.debug(f"Detected MIME type for {url}: {content_type}")
+                    return content_type
+
+        except Exception as e:
+            logging.debug(f"Failed to detect MIME type for {url}: {e}")
+
+        return None
 
     def fetch_url(self, url, max_retries=3):
         """

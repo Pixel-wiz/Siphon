@@ -1,0 +1,8 @@
+# Ignore everything
+*
+
+# Un-ignore the files to be tracked
+!README.md
+!proxy_get.py
+!requirements.txt
+!siphon.py

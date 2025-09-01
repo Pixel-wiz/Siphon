@@ -52,6 +52,20 @@ python siphon.py <URL> [options]
 
 These dependencies will be installed automatically when you run `pip install -r requirements.txt`.
 
+## Utility Scripts
+
+### `proxy_get.py`
+
+This script is a standalone utility designed to fetch and validate a list of free proxies from various online sources. It can be used independently to generate a `proxies.txt` file, which can then be utilized by the main `siphon.py` script for proxy rotation.
+
+To use `proxy_get.py`:
+
+```bash
+python proxy_get.py
+```
+
+This will generate a `proxies.txt` file in the current directory.
+
 ## Examples
 
 -   **Basic scraping**: Scrape a website with default settings.

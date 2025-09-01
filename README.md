@@ -15,7 +15,7 @@ Siphon is a powerful and flexible web scraping tool designed for efficient data 
 
 1.  Clone the repository:
     ```bash
-    git clone [repository-url]
+    git clone https://github.com/Pixel-wiz/Siphon
     cd siphon
     ```
 

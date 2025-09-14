@@ -44,6 +44,20 @@ python siphon.py <URL> [options]
 -   `--proxy-file <FILE>`: Path to a file containing a list of proxies (one per line)
 -   `--output <DIR>`: Output directory for downloaded files (default: current directory)
 
+### Advanced Options (Phase 0)
+
+-   `--events-ndjson <PATH or '-'>`: Emit structured NDJSON event stream to a file or stdout.
+-   `--manifest <PATH>`: Append a per-artifact record `{url, path, sha256, bytes, content_type}`.
+-   `--retries <N>`: Max retries for retryable errors like 429/503/timeouts (default: 3).
+-   `--backoff-base-ms <MS>`: Base for exponential backoff with jitter (default: 250).
+-   `--respect-robots`: Placeholder to enable robots.txt compliance in a later phase.
+
+### Advanced Options (Phase 1)
+
+-   Health-aware proxy rotation with cooldown and simple circuit breaker (auto, no new flags).
+-   Emits additional NDJSON events: `proxy_select`, `proxy_ok`, `proxy_fail`, and breaker transitions.
+-   Retries honor `Retry-After` on 429/503 where present; both fetch and downloads use backoff.
+
 ## Requirements
 
 -   Python 3.x
@@ -65,6 +79,21 @@ python proxy_get.py
 ```
 
 This will generate a `proxies.txt` file in the current directory.
+
+### Validation Matrix
+
+Use the helper to validate against a small set of JS-heavy public sites. This
+exercises dynamic detection (mode_switch/dynamic_ok/dynamic_fail), retries, and
+proxy health events.
+
+```bash
+python scripts/validation_matrix.py --out output/validation --threads 3
+```
+
+Notes:
+- Keep depth small and respect site policies; this is for light testing.
+- If Playwright is installed, Siphon may switch to dynamic mode on pages that
+  look client-rendered; otherwise it will remain static.
 
 ## Examples
 
@@ -91,6 +120,16 @@ This will generate a `proxies.txt` file in the current directory.
 -   **Recursive scraping**: Scrape a website up to a depth of 2.
     ```bash
     python siphon.py https://example.com --depth 2
+    ```
+
+-   **Stream events to stdout and inspect with jq**:
+    ```bash
+    python siphon.py https://example.com --events-ndjson - | jq -r '.event+"\t"+(.status//"" )+"\t"+(.url//"")'
+    ```
+
+-   **Write a manifest with hashes**:
+    ```bash
+    python siphon.py https://example.com --manifest output/manifest.ndjson
     ```
 
 ## License

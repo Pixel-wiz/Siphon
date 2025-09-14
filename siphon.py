@@ -28,6 +28,56 @@ import pathlib
 import base64
 import shutil
 import queue
+import threading
+from datetime import timedelta
+
+# --- Phase 0 helpers: NDJSON events + backoff ---
+class NDJSONEmitter:
+    def __init__(self, sink=None):
+        # sink: path to file, '-' for stdout, or None to disable
+        self.sink = sink
+        self.lock = threading.Lock()
+        self._fh = None
+        if sink and sink not in ('-', ''):
+            # Open append mode, create if missing
+            os.makedirs(os.path.dirname(os.path.abspath(sink)), exist_ok=True)
+            self._fh = open(sink, 'a', encoding='utf-8', buffering=1)
+
+    def emit(self, **fields):
+        if not self.sink:
+            return
+        # Ensure timestamp exists and basic hygiene
+        fields.setdefault('ts', datetime.utcnow().isoformat() + 'Z')
+        line = json.dumps(fields, ensure_ascii=False)
+        with self.lock:
+            if self.sink == '-' or self.sink == 'stdout':
+                try:
+                    print(line)
+                except Exception:
+                    pass
+            elif self._fh:
+                self._fh.write(line + "\n")
+
+    def close(self):
+        with self.lock:
+            if self._fh:
+                try:
+                    self._fh.flush()
+                    self._fh.close()
+                except Exception:
+                    pass
+                self._fh = None
+
+def _retryable_http(status_code):
+    return status_code in (408, 425, 429, 500, 502, 503, 504)
+
+def _backoff_with_jitter(attempt, base_ms):
+    # attempt: 0-based attempt index
+    base = max(1, int(base_ms))
+    # exponential growth with cap to avoid explosion
+    delay_ms = min(30000, base * (2 ** attempt))
+    jitter = random.randint(0, max(50, int(0.2 * delay_ms)))
+    return (delay_ms + jitter) / 1000.0
 
 # New imports for dynamic scraping
 try:
@@ -411,6 +461,14 @@ class ProxyManager:
         self.rotation_strategy = 'intelligent'  # 'round_robin', 'performance', 'intelligent'
         self.max_failures_per_proxy = 3
         self.proxy_cooldown_time = 30  # seconds between reusing same proxy
+
+        # Circuit breaker (Phase 1)
+        self.global_fail_streak = 0
+        self.breaker_state = 'closed'   # 'closed' | 'open' | 'half_open'
+        self.breaker_opened_at = 0.0
+        self.breaker_threshold = 10     # consecutive failures before opening
+        self.breaker_cooldown = 30.0    # seconds to wait before half-open
+        self.half_open_probe_inflight = False
         
         if proxy_list:
             self.load_proxies(proxy_list)
@@ -477,9 +535,24 @@ class ProxyManager:
         self.original_proxy_count = len(self.proxies)
         logging.info(f"Found {len(self.proxies)} working proxies")
     
-    def get_proxy(self, thread_id, url=None):
+    def get_proxy(self, thread_id, url=None, on_event=None):
         """Get a working proxy using intelligent rotation strategy"""
         with self.proxy_lock:
+            now = time.time()
+            # Circuit breaker gate
+            if self.breaker_state == 'open':
+                if (now - self.breaker_opened_at) < self.breaker_cooldown:
+                    # Still cooling; deny proxy to force direct connection
+                    return None
+                # Cooldown elapsed; allow a single probe in half-open
+                self.breaker_state = 'half_open'
+                self.half_open_probe_inflight = False
+                if on_event:
+                    try:
+                        on_event(event='circuit_half_open')
+                    except Exception:
+                        pass
+
             if not self.proxies:
                 if not self.all_failed_warned and self.original_proxy_count > 0:
                     print(f"WARNING: All {self.original_proxy_count} proxies have failed, switching to direct connection")
@@ -526,6 +599,16 @@ class ProxyManager:
                 proxy_key = self._get_proxy_key(selected_proxy)
                 self.proxy_last_used[proxy_key] = current_time
                 self.thread_assignments[thread_id] = selected_proxy
+                # Half-open mode allows only one probe
+                if self.breaker_state == 'half_open':
+                    if self.half_open_probe_inflight:
+                        return None  # Only one probe at a time
+                    self.half_open_probe_inflight = True
+                if on_event:
+                    try:
+                        on_event(event='proxy_select', proxy_id=proxy_key)
+                    except Exception:
+                        pass
                 return selected_proxy
             
             return None
@@ -601,6 +684,12 @@ class ProxyManager:
                     # Running average
                     current_avg = self.proxy_response_times[proxy_key]
                     self.proxy_response_times[proxy_key] = (current_avg + response_time) / 2
+
+            # Circuit breaker: reset on success
+            self.global_fail_streak = 0
+            if self.breaker_state in ('open', 'half_open'):
+                self.breaker_state = 'closed'
+                self.half_open_probe_inflight = False
     
     def record_proxy_failure(self, proxy):
         """Record failed proxy usage"""
@@ -622,6 +711,17 @@ class ProxyManager:
             if failures >= self.max_failures_per_proxy:
                 self.failed_proxies.add(proxy_key)
                 logging.warning(f"Proxy {proxy_key} marked as failed after {failures} failures")
+
+            # Circuit breaker: track global streak
+            self.global_fail_streak += 1
+            if self.breaker_state == 'half_open':
+                # Probe failed: reopen breaker
+                self.breaker_state = 'open'
+                self.breaker_opened_at = time.time()
+                self.half_open_probe_inflight = False
+            elif self.breaker_state == 'closed' and self.global_fail_streak >= self.breaker_threshold:
+                self.breaker_state = 'open'
+                self.breaker_opened_at = time.time()
 
     def mark_proxy_failed(self, proxy):
         """Mark a proxy as failed and remove it from the active list"""
@@ -2452,7 +2552,10 @@ class Siphon:
                  crawl_only=False, download_extensions=None, exclude_extensions=None,
                  exclude_urls=None, include_urls=None, custom_parser=None,
                  dynamic_mode="auto", test_proxies_on_start=False, max_threads=3, verbose=False,
-                 click_elements=None): # Added click_elements parameter
+                 click_elements=None,
+                 # Phase 0 additions
+                 events_ndjson=None, manifest_path=None,
+                 retries=3, backoff_base_ms=250, respect_robots=False):
 
         self.base_url = base_url
         if not base_url:
@@ -2482,6 +2585,13 @@ class Siphon:
         
         self.custom_parser = custom_parser
         self.click_elements = click_elements
+        # Phase 0
+        self.events = NDJSONEmitter(events_ndjson) if events_ndjson else None
+        self.manifest_path = manifest_path
+        self.manifest_lock = threading.Lock()
+        self.retries = max(0, int(retries))
+        self.backoff_base_ms = max(1, int(backoff_base_ms))
+        self.respect_robots = bool(respect_robots)
 
         self.visited_urls = set()
         self.discovered_files = set()
@@ -2670,12 +2780,24 @@ class Siphon:
         """Perform dynamic scraping on a URL, with corrected arguments and error handling."""
         if not self.init_dynamic_scraper() or not self.dynamic_scraper:
             logging.warning("Dynamic scraper not available or failed to initialize.")
+            try:
+                self._emit(event='dynamic_fail', url=url, reason='not_available')
+            except Exception:
+                pass
             return set()
 
         all_links = set()
         try:
+            try:
+                self._emit(event='mode_switch', url=url, mode='dynamic')
+            except Exception:
+                pass
             if not self.dynamic_scraper.navigate(url):
                 logging.warning(f"Dynamic navigation to {url} failed.")
+                try:
+                    self._emit(event='dynamic_fail', url=url, reason='navigate_fail')
+                except Exception:
+                    pass
                 return set()
             
             # Extract links from the fully rendered page
@@ -2705,10 +2827,18 @@ class Siphon:
             except Exception as e:
                 logging.error(f"Error dynamically clicking download elements on {url}: {e}")
             
+            try:
+                self._emit(event='dynamic_ok', url=url, links=len(all_links))
+            except Exception:
+                pass
             return all_links
             
         except Exception as e:
             logging.critical(f"A major, unrecoverable error occurred during dynamic scraping for {url}: {e}")
+            try:
+                self._emit(event='dynamic_fail', url=url, reason=str(e))
+            except Exception:
+                pass
             self.close_dynamic_scraper() # Attempt to clean up
             return set()
     
@@ -2883,6 +3013,46 @@ class Siphon:
     def close(self):
         """Clean up resources"""
         self.close_dynamic_scraper()
+        if self.events:
+            try:
+                # Emit a summary close marker without counters
+                self.events.emit(event='summary', url=self.base_url)
+                self.events.close()
+            except Exception:
+                pass
+
+    # --- Phase 0 helpers on instance ---
+    def _current_thread_num(self):
+        tid = threading.get_ident()
+        with self.thread_id_lock:
+            num = self.thread_ids.get(tid)
+            if num is None:
+                self.thread_counter += 1
+                num = self.thread_counter
+                self.thread_ids[tid] = num
+            return num
+
+    def _emit(self, **fields):
+        if not self.events:
+            return
+        try:
+            fields.setdefault('thread', self._current_thread_num())
+            fields.setdefault('ua_id', hash(self.user_agent) & 0xffff)
+            self.events.emit(**fields)
+        except Exception:
+            pass
+
+    def _append_manifest(self, record: dict):
+        if not self.manifest_path:
+            return
+        try:
+            line = json.dumps(record, ensure_ascii=False)
+            with self.manifest_lock:
+                os.makedirs(os.path.dirname(os.path.abspath(self.manifest_path)), exist_ok=True)
+                with open(self.manifest_path, 'a', encoding='utf-8') as fh:
+                    fh.write(line + "\n")
+        except Exception as e:
+            logging.debug(f"Failed to write manifest: {e}")
 
     def should_crawl_url(self, url):
         """
@@ -3085,13 +3255,17 @@ class Siphon:
         Fetch content from a URL with retries and error handling.
         """
         last_exception = None
+        max_retries = self.retries if hasattr(self, 'retries') and self.retries is not None else max_retries
         
         for attempt in range(max_retries):
             try:
                 proxy_to_use = None
                 if self.proxy_manager and hasattr(self.proxy_manager, 'get_proxy'):
                     try:
-                        proxy_to_use = self.proxy_manager.get_proxy(threading.get_ident(), url)
+                        proxy_to_use = self.proxy_manager.get_proxy(
+                            threading.get_ident(), url,
+                            on_event=lambda **ev: self._emit(**ev)
+                        )
                     except Exception as e_proxy:
                         logging.warning(f"Failed to get proxy for {url}: {e_proxy}")
 
@@ -3101,7 +3275,10 @@ class Siphon:
                 }
                 if self.headers:
                     headers.update(self.headers)
-                
+                # Event: fetch_start
+                self._emit(event='fetch_start', url=url, status='start')
+
+                t0 = time.time()
                 response = self.session.get(
                     url,
                     timeout=(self.timeout, self.timeout),  # (connect_timeout, read_timeout)
@@ -3110,61 +3287,101 @@ class Siphon:
                     headers=headers
                 )
                 response.raise_for_status()
+                elapsed_ms = int((time.time() - t0) * 1000)
                 # Use RobustResponse for better encoding detection
-                return RobustResponse(response.content, response, url).text
+                text = RobustResponse(response.content, response, url).text
+                # Record proxy success if used
+                if proxy_to_use and hasattr(self.proxy_manager, 'record_proxy_success'):
+                    try:
+                        self.proxy_manager.record_proxy_success(proxy_to_use, response_time=elapsed_ms/1000.0)
+                        self._emit(event='proxy_ok', url=url, proxy_id=str(self.proxy_manager._get_proxy_key(proxy_to_use)), elapsed_ms=elapsed_ms)
+                    except Exception:
+                        pass
+                self._emit(event='fetch_ok', url=url, status='ok', retries=attempt, proxy_id=str(proxy_to_use) if proxy_to_use else None, elapsed_ms=elapsed_ms)
+                return text
                 
             except requests.exceptions.HTTPError as e_http:
                 last_exception = e_http
-                # Log 4xx client errors as warnings, not critical errors
-                if 400 <= e_http.response.status_code < 500:
-                    if self.verbose:
-                        logging.warning(f"Client error {e_http.response.status_code} fetching {url}: {e_http.response.reason}")
-                    else:
-                        logging.warning(f"Client error {e_http.response.status_code} fetching {url}: {e_http.response.reason}")
+                status = e_http.response.status_code if e_http.response is not None else None
+                reason = e_http.response.reason if e_http.response is not None else str(e_http)
+                retry_after = None
+                try:
+                    if e_http.response is not None:
+                        retry_after = e_http.response.headers.get('Retry-After')
+                except Exception:
+                    pass
+                # Determine retryability
+                if status and _retryable_http(status) and attempt < max_retries - 1:
+                    # Proxy failure accounting
+                    if self.proxy_manager and proxy_to_use:
+                        try:
+                            if hasattr(self.proxy_manager, 'record_proxy_failure'):
+                                self.proxy_manager.record_proxy_failure(proxy_to_use)
+                            elif hasattr(self.proxy_manager, 'mark_proxy_failed'):
+                                self.proxy_manager.mark_proxy_failed(proxy_to_use)
+                            self._emit(event='proxy_fail', url=url, proxy_id=str(self.proxy_manager._get_proxy_key(proxy_to_use)), reason=f"HTTP {status}")
+                        except Exception:
+                            pass
+                    sleep_s = _backoff_with_jitter(attempt, self.backoff_base_ms)
+                    # Honor Retry-After if provided and sane (<60s)
+                    try:
+                        if retry_after:
+                            if retry_after.isdigit():
+                                sleep_s = max(sleep_s, min(60, int(retry_after)))
+                    except Exception:
+                        pass
+                    self._emit(event='retry', url=url, status='http_error', retries=attempt+1, reason=f"{status}:{reason}")
+                    time.sleep(sleep_s)
+                    continue
+                # Non-retryable or final attempt
+                if 400 <= (status or 0) < 500:
+                    logging.warning(f"Client error {status} fetching {url}: {reason}")
                 else:
-                    if self.verbose:
-                        logging.error(f"HTTP server error {e_http.response.status_code} fetching {url}: {e_http.response.reason}")
-                    else:
-                        logging.error(f"HTTP server error {e_http.response.status_code} fetching {url}: {e_http.response.reason}")
-                if self.proxy_manager and hasattr(self.proxy_manager, 'mark_proxy_failed') and proxy_to_use:
-                    self.proxy_manager.mark_proxy_failed(proxy_to_use)
-                break  # Don't retry HTTP errors
+                    logging.error(f"HTTP server error {status} fetching {url}: {reason}")
+                if self.proxy_manager and proxy_to_use:
+                    try:
+                        if hasattr(self.proxy_manager, 'record_proxy_failure'):
+                            self.proxy_manager.record_proxy_failure(proxy_to_use)
+                        elif hasattr(self.proxy_manager, 'mark_proxy_failed'):
+                            self.proxy_manager.mark_proxy_failed(proxy_to_use)
+                        self._emit(event='proxy_fail', url=url, proxy_id=str(self.proxy_manager._get_proxy_key(proxy_to_use)), reason='conn_error')
+                    except Exception:
+                        pass
+                break
                 
             except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e_conn:
                 last_exception = e_conn
                 if self.proxy_manager and hasattr(self.proxy_manager, 'mark_proxy_failed') and proxy_to_use:
                     self.proxy_manager.mark_proxy_failed(proxy_to_use)
                 if attempt < max_retries - 1:
-                    if self.verbose:
-                        logging.warning(f"Connection error fetching {url} (attempt {attempt + 1}/{max_retries}): {e_conn}")
-                    else:
-                        logging.warning(f"Connection error fetching {url} (attempt {attempt + 1}/{max_retries}): Connection failed")
-                    time.sleep(0.5)  # Shorter delay for faster proxy rotation
+                    logging.warning(f"Connection error fetching {url} (attempt {attempt + 1}/{max_retries}): {e_conn}")
+                    self._emit(event='retry', url=url, status='conn_error', retries=attempt+1, reason=str(e_conn))
+                    time.sleep(_backoff_with_jitter(attempt, self.backoff_base_ms))
                     continue
                 else:
-                    if self.verbose:
-                        logging.error(f"Connection error fetching {url} (final attempt): {e_conn}")
-                    else:
-                        logging.error(f"Connection error fetching {url} (final attempt): Connection failed")
+                    logging.error(f"Connection error fetching {url} (final attempt): {e_conn}")
                         
             except requests.exceptions.RequestException as e_req:
                 last_exception = e_req
-                if self.verbose:
-                    logging.error(f"Request error fetching {url}: {e_req}")
-                else:
-                    logging.error(f"Request error fetching {url}: Request failed")
-                if self.proxy_manager and hasattr(self.proxy_manager, 'mark_proxy_failed') and proxy_to_use:
-                    self.proxy_manager.mark_proxy_failed(proxy_to_use)
+                logging.error(f"Request error fetching {url}: {e_req}")
+                if self.proxy_manager and proxy_to_use:
+                    try:
+                        if hasattr(self.proxy_manager, 'record_proxy_failure'):
+                            self.proxy_manager.record_proxy_failure(proxy_to_use)
+                        elif hasattr(self.proxy_manager, 'mark_proxy_failed'):
+                            self.proxy_manager.mark_proxy_failed(proxy_to_use)
+                        self._emit(event='proxy_fail', url=url, proxy_id=str(self.proxy_manager._get_proxy_key(proxy_to_use)), reason='request_error')
+                    except Exception:
+                        pass
                 break  # Don't retry other request exceptions
                 
             except Exception as e_gen:
                 last_exception = e_gen
-                if self.verbose:
-                    logging.error(f"General error fetching {url}: {e_gen}")
-                else:
-                    logging.error(f"General error fetching {url}: Unexpected error")
+                logging.error(f"General error fetching {url}: {e_gen}")
                 break  # Don't retry general exceptions
                 
+        # Emit failure
+        self._emit(event='fetch_fail', url=url, status='fail', reason=str(last_exception)[:500])
         return None
 
     def parse_html(self, html_content):
@@ -3273,8 +3490,10 @@ class Siphon:
         """
         if url in self.downloaded_files:
             logging.debug(f"File already downloaded: {url}")
+            self._emit(event='download_start', url=url, status='duplicate')
+            self._emit(event='download_complete', url=url, status='duplicate_skipped')
             return
-        
+
         # Handle playbooks.com rule pages by extracting content as markdown
         if 'playbooks.com/rules/' in url and not url.endswith('/'):
             try:
@@ -3302,9 +3521,21 @@ class Siphon:
                         
                         with open(file_path, 'w', encoding='utf-8') as f:
                             f.write(markdown_content)
-                        
+
                         print(f"    + {safe_filename}")
                         logging.info(f"SUCCESS: Saved rule content to {file_path}")
+                        # Manifest + events
+                        data_bytes = markdown_content.encode('utf-8')
+                        sha = hashlib.sha256(data_bytes).hexdigest()
+                        self._append_manifest({
+                            'url': url,
+                            'path': file_path,
+                            'sha256': sha,
+                            'bytes': len(data_bytes),
+                            'content_type': 'text/markdown'
+                        })
+                        self._emit(event='download_start', url=url, status='start')
+                        self._emit(event='download_complete', url=url, status='ok', bytes=len(data_bytes), sha256=sha)
                         self.downloaded_files.add(url)
                         self.discovered_files.add(url)
                         return
@@ -3333,9 +3564,19 @@ class Siphon:
                 
                 with open(file_path, 'wb') as f:
                     f.write(content)
-                
+
                 print(f"    + {safe_filename}")
                 logging.info(f"SUCCESS: Saved blob content to {file_path}")
+                sha = hashlib.sha256(content).hexdigest()
+                self._append_manifest({
+                    'url': url,
+                    'path': file_path,
+                    'sha256': sha,
+                    'bytes': len(content),
+                    'content_type': 'application/octet-stream'
+                })
+                self._emit(event='download_start', url=url, status='start')
+                self._emit(event='download_complete', url=url, status='ok', bytes=len(content), sha256=sha)
                 self.downloaded_files.add(url) # Use blob URI as the unique identifier
                 self.discovered_files.add(url)
                 return
@@ -3373,10 +3614,32 @@ class Siphon:
                         dst.write(src.read())
                     print(f"    + {safe_filename}")
                     logging.info(f"SUCCESS: Copied file from {local_path} to {file_path}")
+                    # Hash copied file
+                    try:
+                        h = hashlib.sha256()
+                        size = 0
+                        with open(file_path, 'rb') as fh:
+                            while True:
+                                chunk = fh.read(8192)
+                                if not chunk:
+                                    break
+                                h.update(chunk)
+                                size += len(chunk)
+                        self._append_manifest({
+                            'url': url,
+                            'path': file_path,
+                            'sha256': h.hexdigest(),
+                            'bytes': size,
+                            'content_type': 'application/octet-stream'
+                        })
+                        self._emit(event='download_start', url=url, status='start')
+                        self._emit(event='download_complete', url=url, status='ok', bytes=size, sha256=h.hexdigest())
+                    except Exception as _e:
+                        logging.debug(f"Failed to hash copied file: {_e}")
                 else:
                     logging.warning(f"Local file not found: {local_path}")
                     return
-                
+
                 self.downloaded_files.add(url)
                 self.discovered_files.add(url)
                 return
@@ -3384,23 +3647,99 @@ class Siphon:
                 logging.error(f"Failed to download from file URI {url}: {e}")
                 return
 
-        # Handle regular HTTP/HTTPS URLs
+        # Handle regular HTTP/HTTPS URLs (with retries + backoff)
         try:
-            proxy_to_use = None
-            if self.proxy_manager and hasattr(self.proxy_manager, 'get_proxy'):
-                try:
-                    proxy_to_use = self.proxy_manager.get_proxy(threading.get_ident(), url)
-                except Exception as e_proxy:
-                    logging.warning(f"Failed to get proxy for {url}: {e_proxy}")
+            last_exc = None
+            max_retries = self.retries if hasattr(self, 'retries') and self.retries is not None else 3
+            for attempt in range(max_retries):
+                proxy_to_use = None
+                if self.proxy_manager and hasattr(self.proxy_manager, 'get_proxy'):
+                    try:
+                        proxy_to_use = self.proxy_manager.get_proxy(
+                            threading.get_ident(), url,
+                            on_event=lambda **ev: self._emit(**ev)
+                        )
+                    except Exception as e_proxy:
+                        logging.warning(f"Failed to get proxy for {url}: {e_proxy}")
 
-            response = self.session.get(
-                url,
-                timeout=(self.timeout, self.timeout),
-                verify=self.verify_ssl,
-                proxies=proxy_to_use,
-                stream=True
-            )
-            response.raise_for_status()
+                t0 = time.time()
+                try:
+                    response = self.session.get(
+                        url,
+                        timeout=(self.timeout, self.timeout),
+                        verify=self.verify_ssl,
+                        proxies=proxy_to_use,
+                        stream=True
+                    )
+                    response.raise_for_status()
+                    elapsed_ms = int((time.time() - t0) * 1000)
+                    # Record proxy success if used
+                    if proxy_to_use and hasattr(self.proxy_manager, 'record_proxy_success'):
+                        try:
+                            self.proxy_manager.record_proxy_success(proxy_to_use, response_time=elapsed_ms/1000.0)
+                            self._emit(event='proxy_ok', url=url, proxy_id=str(self.proxy_manager._get_proxy_key(proxy_to_use)), elapsed_ms=elapsed_ms)
+                        except Exception:
+                            pass
+                    break
+                except requests.exceptions.HTTPError as e_http:
+                    last_exc = e_http
+                    status = e_http.response.status_code if e_http.response is not None else None
+                    retry_after = None
+                    try:
+                        if e_http.response is not None:
+                            retry_after = e_http.response.headers.get('Retry-After')
+                    except Exception:
+                        pass
+                    if status and _retryable_http(status) and attempt < max_retries - 1:
+                        if self.proxy_manager and proxy_to_use:
+                            try:
+                                if hasattr(self.proxy_manager, 'record_proxy_failure'):
+                                    self.proxy_manager.record_proxy_failure(proxy_to_use)
+                                elif hasattr(self.proxy_manager, 'mark_proxy_failed'):
+                                    self.proxy_manager.mark_proxy_failed(proxy_to_use)
+                                self._emit(event='proxy_fail', url=url, proxy_id=str(self.proxy_manager._get_proxy_key(proxy_to_use)), reason=f"HTTP {status}")
+                            except Exception:
+                                pass
+                        sleep_s = _backoff_with_jitter(attempt, self.backoff_base_ms)
+                        try:
+                            if retry_after and retry_after.isdigit():
+                                sleep_s = max(sleep_s, min(60, int(retry_after)))
+                        except Exception:
+                            pass
+                        self._emit(event='retry', url=url, status='http_error', retries=attempt+1, reason=str(status))
+                        time.sleep(sleep_s)
+                        continue
+                    else:
+                        if self.proxy_manager and proxy_to_use:
+                            try:
+                                if hasattr(self.proxy_manager, 'record_proxy_failure'):
+                                    self.proxy_manager.record_proxy_failure(proxy_to_use)
+                                elif hasattr(self.proxy_manager, 'mark_proxy_failed'):
+                                    self.proxy_manager.mark_proxy_failed(proxy_to_use)
+                                self._emit(event='proxy_fail', url=url, proxy_id=str(self.proxy_manager._get_proxy_key(proxy_to_use)), reason='http_final')
+                            except Exception:
+                                pass
+                        raise
+                except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e_conn:
+                    last_exc = e_conn
+                    if self.proxy_manager and proxy_to_use:
+                        try:
+                            if hasattr(self.proxy_manager, 'record_proxy_failure'):
+                                self.proxy_manager.record_proxy_failure(proxy_to_use)
+                            elif hasattr(self.proxy_manager, 'mark_proxy_failed'):
+                                self.proxy_manager.mark_proxy_failed(proxy_to_use)
+                            self._emit(event='proxy_fail', url=url, proxy_id=str(self.proxy_manager._get_proxy_key(proxy_to_use)), reason='conn_error')
+                        except Exception:
+                            pass
+                    if attempt < max_retries - 1:
+                        self._emit(event='retry', url=url, status='conn_error', retries=attempt+1, reason=str(e_conn))
+                        time.sleep(_backoff_with_jitter(attempt, self.backoff_base_ms))
+                        continue
+                    raise
+            else:
+                # exhausted
+                if last_exc:
+                    raise last_exc
 
             # Get filename from URL or headers
             filename = None
@@ -3435,27 +3774,43 @@ class Siphon:
             # Ensure downloads_subdir exists
             os.makedirs(self.downloads_subdir, exist_ok=True)
 
+            self._emit(event='download_start', url=url, status='start')
+            h = hashlib.sha256()
+            size = 0
             with open(filepath, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
-                    if chunk: 
+                    if chunk:
                         f.write(chunk)
+                        h.update(chunk)
+                        size += len(chunk)
             
             print(f"    + {filename}")
             self.downloaded_files.add(url)
             self.discovered_files.add(url) 
             logging.info(f"Successfully downloaded: {filepath} (from {url})")
+            self._append_manifest({
+                'url': url,
+                'path': filepath,
+                'sha256': h.hexdigest(),
+                'bytes': size,
+                'content_type': response.headers.get('content-type', '')
+            })
+            self._emit(event='download_complete', url=url, status='ok', bytes=size, sha256=h.hexdigest())
 
         except requests.exceptions.HTTPError as e_http:
             logging.error(f"HTTP error {e_http.response.status_code} downloading {url}: {e_http.response.reason}")
             if self.proxy_manager and hasattr(self.proxy_manager, 'mark_proxy_failed') and proxy_to_use:
                 self.proxy_manager.mark_proxy_failed(proxy_to_use)
+            self._emit(event='download_complete', url=url, status='fail', reason=str(e_http))
         except requests.exceptions.RequestException as e_req: 
             logging.error(f"Request error downloading {url}: {e_req}")
             if self.proxy_manager and hasattr(self.proxy_manager, 'mark_proxy_failed') and proxy_to_use:
                 self.proxy_manager.mark_proxy_failed(proxy_to_use)
+            self._emit(event='download_complete', url=url, status='fail', reason=str(e_req))
         except Exception as e_gen:
             logging.error(f"General error downloading {url}: {e_gen}")
             # import traceback; logging.debug(traceback.format_exc()) # For detailed debug
+            self._emit(event='download_complete', url=url, status='fail', reason=str(e_gen))
 
     def filter_target_files(self, links):
         """Filter a list of links to find ones that match download criteria."""
@@ -3503,6 +3858,12 @@ def main():
     parser.add_argument("--click-elements", help="CSS selectors for elements to click (comma-separated)")
     parser.add_argument("--test-proxies", help="Test proxies on startup before crawling", action="store_true")
     parser.add_argument("--threads", help="Number of worker threads", type=int, default=5)
+    # Phase 0 flags
+    parser.add_argument("--events-ndjson", help="Path to write NDJSON events or '-' for stdout", default=None)
+    parser.add_argument("--manifest", help="Path to write artifact manifest (NDJSON)", default=None)
+    parser.add_argument("--retries", help="Max retries for fetch operations", type=int, default=3)
+    parser.add_argument("--backoff-base-ms", help="Base backoff in milliseconds", type=int, default=250)
+    parser.add_argument("--respect-robots", help="Respect robots.txt (placeholder)", action="store_true")
     
     args = parser.parse_args()
     
@@ -3599,7 +3960,13 @@ def main():
         dynamic_mode=args.dynamic,
         test_proxies_on_start=args.test_proxies,
         max_threads=args.threads,
-        verbose=args.verbose
+        verbose=args.verbose,
+        # Phase 0 wiring
+        events_ndjson=args.events_ndjson,
+        manifest_path=args.manifest,
+        retries=args.retries,
+        backoff_base_ms=args.backoff_base_ms,
+        respect_robots=args.respect_robots
     )
     
     try:

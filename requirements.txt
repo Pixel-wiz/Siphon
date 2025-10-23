@@ -10,3 +10,9 @@ playwright>=1.20.0
 # Additional utilities
 tqdm>=4.61.0
 colorama>=0.4.4
+psutil>=5.8.0  # For memory monitoring
+ndjson>=0.3.1  # For NDJSON event streaming
+
+# Testing utilities (optional)
+pytest>=7.0.0
+pytest-timeout>=2.1.0

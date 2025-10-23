@@ -30,6 +30,173 @@ import shutil
 import queue
 import threading
 from datetime import timedelta
+from dataclasses import dataclass
+from enum import Enum
+from typing import Optional, Dict, Any, List
+
+# --- Enhanced Features: Exponential Backoff, Proxy Health, Browser Config ---
+
+class RetryStrategy(Enum):
+    """Retry strategies for failed requests"""
+    EXPONENTIAL = "exponential"
+    LINEAR = "linear"
+    FIBONACCI = "fibonacci"
+
+@dataclass
+class RetryConfig:
+    """Configuration for retry behavior"""
+    max_retries: int = 5
+    base_delay: float = 1.0
+    max_delay: float = 60.0
+    exponential_base: float = 2.0
+    jitter: bool = True
+    strategy: RetryStrategy = RetryStrategy.EXPONENTIAL
+    retry_on_status_codes: List[int] = None
+    retry_on_exceptions: List[type] = None
+
+    def __post_init__(self):
+        if self.retry_on_status_codes is None:
+            self.retry_on_status_codes = [408, 429, 500, 502, 503, 504]
+        if self.retry_on_exceptions is None:
+            self.retry_on_exceptions = [ConnectionError, TimeoutError, ConnectionResetError]
+
+class ExponentialBackoff:
+    """Implements exponential backoff with jitter"""
+
+    def __init__(self, config: RetryConfig):
+        self.config = config
+        self.fibonacci_cache = {0: 0, 1: 1}
+
+    def get_delay(self, attempt: int) -> float:
+        """Calculate delay for given attempt number"""
+        if self.config.strategy == RetryStrategy.EXPONENTIAL:
+            delay = self.config.base_delay * (self.config.exponential_base ** attempt)
+        elif self.config.strategy == RetryStrategy.LINEAR:
+            delay = self.config.base_delay * (attempt + 1)
+        elif self.config.strategy == RetryStrategy.FIBONACCI:
+            delay = self.config.base_delay * self._fibonacci(attempt)
+        else:
+            delay = self.config.base_delay
+
+        if self.config.jitter:
+            jitter_range = delay * 0.25
+            delay = delay + random.uniform(-jitter_range, jitter_range)
+
+        return min(delay, self.config.max_delay)
+
+    def _fibonacci(self, n: int) -> int:
+        """Calculate Fibonacci number with memoization"""
+        if n in self.fibonacci_cache:
+            return self.fibonacci_cache[n]
+        self.fibonacci_cache[n] = self._fibonacci(n - 1) + self._fibonacci(n - 2)
+        return self.fibonacci_cache[n]
+
+class ProxyHealthMonitor:
+    """Monitor and track proxy health with scoring"""
+
+    def __init__(self):
+        self.proxy_scores = {}
+        self.proxy_stats = {}
+        self.proxy_last_failure = {}
+        self.proxy_consecutive_failures = {}
+        self.success_weight = 10
+        self.failure_weight = -15
+        self.timeout_weight = -20
+        self.response_time_weight = -0.5
+        self.min_score = -100
+        self.recovery_time = 300
+        self.max_consecutive_failures = 5
+
+    def record_success(self, proxy: str, response_time: float):
+        """Record successful proxy use"""
+        if proxy not in self.proxy_stats:
+            self.proxy_stats[proxy] = {'successes': 0, 'failures': 0, 'total_time': 0, 'count': 0}
+
+        stats = self.proxy_stats[proxy]
+        stats['successes'] += 1
+        stats['total_time'] += response_time
+        stats['count'] += 1
+
+        current_score = self.proxy_scores.get(proxy, 0)
+        time_penalty = self.response_time_weight * response_time
+        self.proxy_scores[proxy] = current_score + self.success_weight + time_penalty
+        self.proxy_consecutive_failures[proxy] = 0
+
+    def record_failure(self, proxy: str, error_type: str = "general"):
+        """Record failed proxy use"""
+        if proxy not in self.proxy_stats:
+            self.proxy_stats[proxy] = {'successes': 0, 'failures': 0, 'total_time': 0, 'count': 0}
+
+        stats = self.proxy_stats[proxy]
+        stats['failures'] += 1
+
+        current_score = self.proxy_scores.get(proxy, 0)
+        penalty = self.timeout_weight if error_type == "timeout" else self.failure_weight
+        self.proxy_scores[proxy] = current_score + penalty
+
+        self.proxy_consecutive_failures[proxy] = self.proxy_consecutive_failures.get(proxy, 0) + 1
+        self.proxy_last_failure[proxy] = time.time()
+
+    def is_proxy_healthy(self, proxy: str) -> bool:
+        """Check if proxy is healthy enough to use"""
+        if self.proxy_scores.get(proxy, 0) < self.min_score:
+            return False
+
+        if self.proxy_consecutive_failures.get(proxy, 0) >= self.max_consecutive_failures:
+            last_failure = self.proxy_last_failure.get(proxy, 0)
+            if time.time() - last_failure < self.recovery_time:
+                return False
+            else:
+                self.proxy_consecutive_failures[proxy] = 0
+
+        return True
+
+    def get_best_proxy(self, proxy_list: List[str]) -> Optional[str]:
+        """Get the best performing healthy proxy"""
+        healthy_proxies = [p for p in proxy_list if self.is_proxy_healthy(p)]
+        if not healthy_proxies:
+            return None
+
+        healthy_proxies.sort(key=lambda p: self.proxy_scores.get(p, 0), reverse=True)
+        top_count = min(3, len(healthy_proxies))
+        top_proxies = healthy_proxies[:top_count]
+        return random.choice(top_proxies)
+
+class BrowserConfig:
+    """Configuration for browser-based scraping"""
+
+    def __init__(self, headless: bool = True, headless_mode_switchable: bool = True,
+                 viewport_width: int = 1920, viewport_height: int = 1080,
+                 user_agent: str = None, disable_images: bool = False,
+                 disable_javascript: bool = False, timeout: int = 30000,
+                 wait_until: str = "networkidle"):
+
+        self.headless = headless
+        self.headless_mode_switchable = headless_mode_switchable
+        self.viewport_width = viewport_width
+        self.viewport_height = viewport_height
+        self.user_agent = user_agent
+        self.disable_images = disable_images
+        self.disable_javascript = disable_javascript
+        self.timeout = timeout
+        self.wait_until = wait_until
+
+    def toggle_headless(self):
+        """Toggle headless mode if switchable"""
+        if self.headless_mode_switchable:
+            self.headless = not self.headless
+            logging.info(f"Headless mode {'enabled' if self.headless else 'disabled'}")
+        else:
+            logging.warning("Headless mode is not switchable")
+
+    def get_browser_args(self) -> List[str]:
+        """Get browser launch arguments"""
+        args = []
+        if self.headless:
+            args.extend(['--headless', '--disable-gpu', '--no-sandbox', '--disable-setuid-sandbox'])
+        if self.disable_images:
+            args.append('--blink-settings=imagesEnabled=false')
+        return args
 
 # --- Phase 0 helpers: NDJSON events + backoff ---
 class NDJSONEmitter:
@@ -805,7 +972,9 @@ class WebScraper:
         self.find_apis = find_apis
         self.crawl_only = crawl_only
         
+        # Bounded discovered files list
         self.discovered_files = []
+        self.max_discovered_files = 10000
         self.files_lock = threading.Lock()
         
         if self.dump_all:
@@ -815,21 +984,33 @@ class WebScraper:
             else:
                 logging.info(f"Crawl-only dump all mode: Will list {len(self.filetypes)} file types")
         
-        self.visited = set()
+        # Use bounded collections to prevent memory leaks
+        from collections import OrderedDict
+
+        # Bounded visited set using OrderedDict for LRU behavior
+        self.visited = OrderedDict()
+        self.max_visited_size = 100000  # Max URLs to track
         self.visited_lock = threading.Lock()
+
         self.url_queue = deque([(self.start_url, 0)])
         self.queue_lock = threading.Lock()
         self.active_workers = 0
         self.workers_lock = threading.Lock()
         self.all_workers_started = threading.Event()
-        
-        self.discovered_apis = set()
-        self.api_keys_found = set()
+
+        # Bounded discovery tracking
+        self.discovered_apis = OrderedDict()
+        self.max_apis_size = 10000
+        self.api_keys_found = OrderedDict()
+        self.max_keys_size = 1000
         self.api_lock = threading.Lock()
-        
+
         self.proxy_manager = ProxyManager(proxies or [])
         self.rate_limiter = RateLimiter()
-        self.cache = {}
+
+        # Bounded cache with LRU eviction
+        self.cache = OrderedDict()
+        self.max_cache_size = 10000
         self.session = requests.Session()
         
         self.thread_counter = 0
@@ -917,6 +1098,13 @@ class WebScraper:
             logging.warning(f"Failed to initialize Selenium: {e}")
             self.use_selenium = False
 
+    def _add_to_cache(self, key, value):
+        """Add to cache with size limit"""
+        self.cache[key] = value
+        if len(self.cache) > self.max_cache_size:
+            # Remove oldest item
+            self.cache.popitem(last=False)
+
     def get_random_headers(self):
         
         return {
@@ -942,32 +1130,34 @@ class WebScraper:
         for attempt in range(retries):
             if shutdown_flag.is_set():
                 return None
-                
+
+            # Initialize proxy_info at the start of each attempt
+            proxy_info = ""
+            proxy = None
+
             try:
                 cache_key = hashlib.md5(url.encode()).hexdigest()
                 if cache_key in self.cache:
                     logging.debug(f"Cache hit for {url}")
                     return self.cache[cache_key]
-                
+
                 self.rate_limiter.wait()
-                
-                # Add intelligent delay based on proxy usage
+
+                if self.use_selenium and hasattr(self, 'driver'):
+                    return self._selenium_request(url)
+
+                proxy = self.proxy_manager.get_proxy(thread_id, url)
                 if proxy:
+                    proxy_host = proxy.get('http', 'direct').replace('http://', '').split(':')[0]
+                    proxy_info = f" via {proxy_host}"
+
+                    # Add intelligent delay based on proxy usage
                     proxy_key = self.proxy_manager._get_proxy_key(proxy)
                     if proxy_key in self.proxy_manager.proxy_last_used:
                         time_since_last = time.time() - self.proxy_manager.proxy_last_used[proxy_key]
                         if time_since_last < 1.0:  # Less than 1 second since last use
                             additional_delay = random.uniform(0.5, 2.0)
                             time.sleep(additional_delay)
-                
-                if self.use_selenium and hasattr(self, 'driver'):
-                    return self._selenium_request(url)
-                
-                proxy = self.proxy_manager.get_proxy(thread_id, url)
-                proxy_info = ""
-                if proxy:
-                    proxy_host = proxy.get('http', 'direct').replace('http://', '').split(':')[0]
-                    proxy_info = f" via {proxy_host}"
                 
                 headers = self.get_random_headers()
                 
@@ -995,7 +1185,8 @@ class WebScraper:
                     if proxy:
                         self.proxy_manager.record_proxy_success(proxy, response_time)
                     
-                    self.cache[cache_key] = robust_response
+                    # Bounded cache - remove oldest if at max size
+                    self._add_to_cache(cache_key, robust_response)
                     return robust_response
                 else:
                     logging.warning(f"HTTP {response.status_code} for {url}{proxy_info}")
@@ -1052,7 +1243,8 @@ class WebScraper:
                     
                     robust_response = RobustResponse(raw_content, response, url)
                     self.rate_limiter.adjust(response_time, response.status_code)
-                    self.cache[cache_key] = robust_response
+                    # Bounded cache - remove oldest if at max size
+                    self._add_to_cache(cache_key, robust_response)
                     return robust_response
                 else:
                     logging.warning(f"HTTP {response.status_code} for {url} via {proxy_host}")
@@ -1083,7 +1275,8 @@ class WebScraper:
                     
                     robust_response = RobustResponse(raw_content, response, url)
                     self.rate_limiter.adjust(response_time, response.status_code)
-                    self.cache[cache_key] = robust_response
+                    # Bounded cache - remove oldest if at max size
+                    self._add_to_cache(cache_key, robust_response)
                     return robust_response
                 else:
                     logging.warning(f"Direct connection HTTP {response.status_code} for {url}")
@@ -1206,7 +1399,10 @@ class WebScraper:
                     
                     with self.api_lock:
                         if api_url not in self.discovered_apis:
-                            self.discovered_apis.add(api_url)
+                            # Add with size limit
+                            self.discovered_apis[api_url] = True
+                            if len(self.discovered_apis) > self.max_apis_size:
+                                self.discovered_apis.popitem(last=False)  # Remove oldest
                             found_apis.append(api_url)
                             logging.info(f"[API] Found endpoint: {api_url}")
             except:
@@ -1220,7 +1416,10 @@ class WebScraper:
                     if len(key_value) >= 20:
                         with self.api_lock:
                             if key_value not in self.api_keys_found:
-                                self.api_keys_found.add(key_value)
+                                # Add with size limit
+                                self.api_keys_found[key_value] = True
+                                if len(self.api_keys_found) > self.max_keys_size:
+                                    self.api_keys_found.popitem(last=False)  # Remove oldest
                                 logging.info(f"[KEY] Found potential API key/token: {key_value[:10]}...")
             except:
                 pass
@@ -1444,6 +1643,9 @@ class WebScraper:
                     }
                     with self.files_lock:
                         self.discovered_files.append(file_info)
+                        # Keep list bounded
+                        if len(self.discovered_files) > self.max_discovered_files:
+                            self.discovered_files.pop(0)  # Remove oldest
                     logging.info(f"Found file: {display_url} ({content_type}, {len(response.content)} bytes)")
                 else:
                     self._save_file(url, response.content)
@@ -1526,6 +1728,9 @@ class WebScraper:
             }
             with self.files_lock:
                 self.discovered_files.append(file_info)
+                # Keep list bounded
+                if len(self.discovered_files) > self.max_discovered_files:
+                    self.discovered_files.pop(0)  # Remove oldest
         
         return data
     
@@ -1736,11 +1941,20 @@ class WebScraper:
                         self.url_queue.append((url, current_depth + 1))
     
     def mark_visited(self, url):
-        
+
         with self.visited_lock:
             if url in self.visited:
+                # Move to end for LRU
+                self.visited.move_to_end(url)
                 return True
-            self.visited.add(url)
+
+            # Add new URL with size limit
+            self.visited[url] = True
+
+            # Remove oldest if over limit
+            if len(self.visited) > self.max_visited_size:
+                self.visited.popitem(last=False)  # Remove oldest
+
             return False
     
     def worker_thread(self):
@@ -2593,9 +2807,14 @@ class Siphon:
         self.backoff_base_ms = max(1, int(backoff_base_ms))
         self.respect_robots = bool(respect_robots)
 
-        self.visited_urls = set()
-        self.discovered_files = set()
-        self.downloaded_files = set()
+        # Use OrderedDict for bounded collections with LRU eviction
+        from collections import OrderedDict
+        self.visited_urls = OrderedDict()
+        self.max_visited_urls = 100000
+        self.discovered_files = OrderedDict()
+        self.max_discovered_files = 10000
+        self.downloaded_files = OrderedDict()
+        self.max_downloaded_files = 10000
 
         self.session = requests.Session()
         if self.request_headers:
@@ -2918,7 +3137,9 @@ class Siphon:
                         self.url_queue.task_done()
                         continue
                         
-                    self.visited_urls.add(url)
+                    self.visited_urls[url] = True
+                    if len(self.visited_urls) > self.max_visited_urls:
+                        self.visited_urls.popitem(last=False)
                 
                 # Show progress for all URLs when verbose
                 if self.verbose:
@@ -3053,6 +3274,12 @@ class Siphon:
                     fh.write(line + "\n")
         except Exception as e:
             logging.debug(f"Failed to write manifest: {e}")
+
+    def _add_to_bounded_dict(self, dict_obj, key, value, max_size):
+        """Add to OrderedDict with size limit"""
+        dict_obj[key] = value
+        if len(dict_obj) > max_size:
+            dict_obj.popitem(last=False)  # Remove oldest
 
     def should_crawl_url(self, url):
         """
@@ -3536,8 +3763,8 @@ class Siphon:
                         })
                         self._emit(event='download_start', url=url, status='start')
                         self._emit(event='download_complete', url=url, status='ok', bytes=len(data_bytes), sha256=sha)
-                        self.downloaded_files.add(url)
-                        self.discovered_files.add(url)
+                        self._add_to_bounded_dict(self.downloaded_files, url, True, self.max_downloaded_files)
+                        self._add_to_bounded_dict(self.discovered_files, url, True, self.max_discovered_files)
                         return
                     else:
                         logging.warning(f"Could not extract content from {url}")
@@ -3577,8 +3804,8 @@ class Siphon:
                 })
                 self._emit(event='download_start', url=url, status='start')
                 self._emit(event='download_complete', url=url, status='ok', bytes=len(content), sha256=sha)
-                self.downloaded_files.add(url) # Use blob URI as the unique identifier
-                self.discovered_files.add(url)
+                self._add_to_bounded_dict(self.downloaded_files, url, True, self.max_downloaded_files) # Use blob URI as the unique identifier
+                self._add_to_bounded_dict(self.discovered_files, url, True, self.max_discovered_files)
                 return
             except Exception as e:
                 logging.error(f"Failed to download from blob URI {url}: {e}")
@@ -3640,8 +3867,8 @@ class Siphon:
                     logging.warning(f"Local file not found: {local_path}")
                     return
 
-                self.downloaded_files.add(url)
-                self.discovered_files.add(url)
+                self._add_to_bounded_dict(self.downloaded_files, url, True, self.max_downloaded_files)
+                self._add_to_bounded_dict(self.discovered_files, url, True, self.max_discovered_files)
                 return
             except Exception as e:
                 logging.error(f"Failed to download from file URI {url}: {e}")
@@ -3785,8 +4012,8 @@ class Siphon:
                         size += len(chunk)
             
             print(f"    + {filename}")
-            self.downloaded_files.add(url)
-            self.discovered_files.add(url) 
+            self._add_to_bounded_dict(self.downloaded_files, url, True, self.max_downloaded_files)
+            self._add_to_bounded_dict(self.discovered_files, url, True, self.max_discovered_files) 
             logging.info(f"Successfully downloaded: {filepath} (from {url})")
             self._append_manifest({
                 'url': url,

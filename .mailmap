@@ -4,3 +4,6 @@ Jahfonte <jahbulon@duck.com>
 Jahfonte <jahbulonz@gmail.com> Jahfonte <jahbulon@duck.com>
 Todd <jahbulonz@gmail.com> Pixel-wiz <jahbulonz@gmail.com>
 Developer <developer@local>
+
+# Explicitly map any claude-related emails to legitimate contributors
+Pixel-wiz <noreply@anthropic.com>

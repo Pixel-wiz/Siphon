@@ -339,6 +339,63 @@ USER_AGENTS = [
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 OPR/116.0.0.0',
 ]
 
+# Realistic Accept-Language values (browser-like distribution)
+ACCEPT_LANGUAGES = [
+    'en-US,en;q=0.9',
+    'en-GB,en;q=0.9',
+    'en-US,en;q=0.9,es;q=0.8',
+    'en-US,en;q=0.9,fr;q=0.8',
+    'en-US,en;q=0.9,de;q=0.8',
+    'en-CA,en;q=0.9',
+    'en-AU,en;q=0.9',
+    'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
+    'en-US,en;q=0.9,ja;q=0.8',
+    'en-US,en;q=0.9,ko;q=0.8',
+]
+
+# Realistic Accept headers based on browser type
+ACCEPT_HEADERS = [
+    'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+    'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+]
+
+def generate_realistic_headers(user_agent, referer=None, url=None):
+    """
+    Generate realistic HTTP headers that match real browser behavior.
+    This helps avoid detection by mimicking actual browser fingerprints.
+    """
+    headers = {
+        'User-Agent': user_agent,
+        'Accept': random.choice(ACCEPT_HEADERS),
+        'Accept-Language': random.choice(ACCEPT_LANGUAGES),
+        'Accept-Encoding': 'gzip, deflate, br',
+        'DNT': '1',  # Do Not Track
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+    }
+
+    # Add Referer if provided
+    if referer:
+        headers['Referer'] = referer
+
+    # Add Sec-Fetch-* headers (Chrome/Edge specific)
+    if 'Chrome' in user_agent or 'Edg' in user_agent:
+        headers.update({
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none' if not referer else 'same-origin',
+            'Sec-Fetch-User': '?1',
+            'sec-ch-ua': '"Chromium";v="131", "Not_A Brand";v="24"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"' if 'Windows' in user_agent else '"macOS"' if 'Macintosh' in user_agent else '"Linux"',
+        })
+
+    # Cache-Control for more realistic behavior
+    headers['Cache-Control'] = 'max-age=0'
+
+    return headers
+
 API_PATTERNS = [
     r'/api/v\d+',
     r'/api/[\w-]+',
@@ -807,50 +864,94 @@ class ProxyManager:
             return min(available_proxies, key=get_performance_score)
             
         else:  # intelligent strategy
-            # Combine performance and usage stats
+            # Advanced scoring combining multiple factors
             def get_intelligent_score(proxy):
                 proxy_key = self._get_proxy_key(proxy)
-                
-                # Base score on response time (lower is better)
+                score = 0.0
+
+                # Factor 1: Response time (40% weight) - lower is better
                 response_time = self.proxy_response_times.get(proxy_key, 5.0)
-                
-                # Factor in success rate
+                response_score = min(response_time / 5.0, 2.0)  # Normalize to 0-2 range
+                score += response_score * 0.4
+
+                # Factor 2: Success rate (40% weight) - higher is better
                 if proxy_key in self.proxy_usage_stats:
                     stats = self.proxy_usage_stats[proxy_key]
-                    success_rate = stats.get('successes', 0) / max(stats.get('total', 1), 1)
-                    # Penalize proxies with low success rates
-                    response_time *= (2.0 - success_rate)
-                
-                # Add randomness to avoid always picking the same proxy
-                response_time *= random.uniform(0.8, 1.2)
-                
-                return response_time
-            
+                    total = max(stats.get('total', 1), 1)
+                    successes = stats.get('successes', 0)
+                    failures = stats.get('failures', 0)
+
+                    # Calculate success rate with exponential decay for old failures
+                    # Recent attempts matter more than old ones
+                    recent_window = 10
+                    if total > recent_window:
+                        # Weight recent attempts more heavily
+                        recent_success_rate = (successes - (failures * 0.5)) / total
+                    else:
+                        recent_success_rate = successes / total if total > 0 else 0.5
+
+                    # Convert to penalty (lower success rate = higher penalty)
+                    success_penalty = (1.0 - max(0, min(1, recent_success_rate))) * 2.0
+                    score += success_penalty * 0.4
+                else:
+                    # New proxy - give it moderate score (not best, not worst)
+                    score += 0.5 * 0.4
+
+                # Factor 3: Time since last use (10% weight) - prefer fresher proxies
+                if proxy_key in self.proxy_last_used:
+                    time_since_use = time.time() - self.proxy_last_used[proxy_key]
+                    # Normalize: 0-30s gets penalty, >30s no penalty
+                    freshness_score = max(0, (30 - time_since_use) / 30.0)
+                    score += freshness_score * 0.1
+                else:
+                    # Never used - prefer it slightly
+                    score += 0.0
+
+                # Factor 4: Consecutive failures (10% weight) - penalize failure streaks
+                consecutive_failures = 0
+                if proxy_key in self.proxy_usage_stats:
+                    consecutive_failures = self.proxy_usage_stats[proxy_key].get('consecutive_failures', 0)
+                failure_penalty = min(consecutive_failures / 3.0, 1.0)  # Normalize to 0-1
+                score += failure_penalty * 0.1
+
+                # Add small randomness to break ties and avoid predictability (±5%)
+                score *= random.uniform(0.95, 1.05)
+
+                return score
+
+            # Select proxy with lowest score (best overall)
             return min(available_proxies, key=get_intelligent_score)
     
     def record_proxy_success(self, proxy, response_time=None):
         """Record successful proxy usage"""
         if not proxy:
             return
-            
+
         proxy_key = self._get_proxy_key(proxy)
-        
+
         with self.proxy_lock:
             # Update usage stats
             if proxy_key not in self.proxy_usage_stats:
-                self.proxy_usage_stats[proxy_key] = {'successes': 0, 'failures': 0, 'total': 0}
-            
+                self.proxy_usage_stats[proxy_key] = {
+                    'successes': 0,
+                    'failures': 0,
+                    'total': 0,
+                    'consecutive_failures': 0
+                }
+
             self.proxy_usage_stats[proxy_key]['successes'] += 1
             self.proxy_usage_stats[proxy_key]['total'] += 1
-            
-            # Update response times
+            # Reset consecutive failures on success
+            self.proxy_usage_stats[proxy_key]['consecutive_failures'] = 0
+
+            # Update response times with weighted average (favor recent times)
             if response_time is not None:
                 if proxy_key not in self.proxy_response_times:
                     self.proxy_response_times[proxy_key] = response_time
                 else:
-                    # Running average
+                    # Weighted average: 70% old, 30% new
                     current_avg = self.proxy_response_times[proxy_key]
-                    self.proxy_response_times[proxy_key] = (current_avg + response_time) / 2
+                    self.proxy_response_times[proxy_key] = (current_avg * 0.7) + (response_time * 0.3)
 
             # Circuit breaker: reset on success
             self.global_fail_streak = 0
@@ -862,22 +963,31 @@ class ProxyManager:
         """Record failed proxy usage"""
         if not proxy:
             return
-            
+
         proxy_key = self._get_proxy_key(proxy)
-        
+
         with self.proxy_lock:
             # Update usage stats
             if proxy_key not in self.proxy_usage_stats:
-                self.proxy_usage_stats[proxy_key] = {'successes': 0, 'failures': 0, 'total': 0}
-            
+                self.proxy_usage_stats[proxy_key] = {
+                    'successes': 0,
+                    'failures': 0,
+                    'total': 0,
+                    'consecutive_failures': 0
+                }
+
             self.proxy_usage_stats[proxy_key]['failures'] += 1
             self.proxy_usage_stats[proxy_key]['total'] += 1
-            
+            self.proxy_usage_stats[proxy_key]['consecutive_failures'] += 1
+
             # Mark as failed if too many failures
             failures = self.proxy_usage_stats[proxy_key]['failures']
-            if failures >= self.max_failures_per_proxy:
+            consecutive = self.proxy_usage_stats[proxy_key]['consecutive_failures']
+
+            # More aggressive marking based on consecutive failures
+            if consecutive >= 5 or failures >= self.max_failures_per_proxy:
                 self.failed_proxies.add(proxy_key)
-                logging.warning(f"Proxy {proxy_key} marked as failed after {failures} failures")
+                logging.warning(f"Proxy {proxy_key} marked as failed (consecutive: {consecutive}, total: {failures})")
 
             # Circuit breaker: track global streak
             self.global_fail_streak += 1
@@ -2131,15 +2241,97 @@ class DynamicScraper:
 
             logging.debug("Launching Chromium browser...")
             # Add timeout and better error handling for browser launch
+            # Randomize browser args to avoid fingerprinting
+            browser_args = [
+                '--disable-blink-features=AutomationControlled',  # Hide automation
+                '--disable-dev-shm-usage',  # Overcome limited resource problems
+                '--no-sandbox',  # Required for some environments
+                '--disable-web-security',  # Allow cross-origin requests
+                '--disable-features=IsolateOrigins,site-per-process',
+            ]
+
             self.browser = self.playwright.chromium.launch(
                 headless=self.headless,
                 proxy=proxy_config,
-                timeout=60000  # 60 second timeout for browser launch
+                timeout=60000,  # 60 second timeout for browser launch
+                args=browser_args
             )
-            
-            logging.debug("Creating new page...")
-            self.page = self.browser.new_page(user_agent=self.user_agent)
-            
+
+            # Generate randomized browser context settings
+            viewport_options = [
+                {'width': 1920, 'height': 1080},  # Full HD
+                {'width': 1366, 'height': 768},   # Common laptop
+                {'width': 1536, 'height': 864},   # Common laptop
+                {'width': 1440, 'height': 900},   # MacBook
+                {'width': 2560, 'height': 1440},  # 2K
+            ]
+            viewport = random.choice(viewport_options)
+
+            # Randomize timezone
+            timezones = [
+                'America/New_York', 'America/Chicago', 'America/Los_Angeles',
+                'America/Denver', 'Europe/London', 'Europe/Paris',
+                'Asia/Tokyo', 'Australia/Sydney', 'America/Toronto'
+            ]
+            timezone = random.choice(timezones)
+
+            # Randomize locale
+            locales = ['en-US', 'en-GB', 'en-CA', 'en-AU']
+            locale = random.choice(locales)
+
+            logging.debug("Creating new page with randomized fingerprint...")
+            context = self.browser.new_context(
+                user_agent=self.user_agent,
+                viewport=viewport,
+                timezone_id=timezone,
+                locale=locale,
+                color_scheme='light' if random.random() > 0.2 else 'dark',
+                device_scale_factor=random.choice([1, 1.5, 2]),
+                has_touch=random.random() > 0.8,  # 20% chance of touch support
+                java_script_enabled=True,
+                bypass_csp=True,  # Bypass Content Security Policy
+            )
+
+            self.page = context.new_page()
+
+            # Inject scripts to hide automation
+            self.page.add_init_script("""
+                // Overwrite the `navigator.webdriver` property
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined
+                });
+
+                // Overwrite the `navigator.plugins` to appear more realistic
+                Object.defineProperty(navigator, 'plugins', {
+                    get: () => [1, 2, 3, 4, 5]
+                });
+
+                // Overwrite the `navigator.languages` to be more realistic
+                Object.defineProperty(navigator, 'languages', {
+                    get: () => ['en-US', 'en']
+                });
+
+                // Add chrome object to appear more like a real browser
+                window.chrome = {
+                    runtime: {}
+                };
+
+                // Randomize canvas fingerprint
+                const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
+                HTMLCanvasElement.prototype.toDataURL = function(type) {
+                    const shift = Math.random() * 0.0000001;
+                    const context = this.getContext('2d');
+                    if (context) {
+                        const imageData = context.getImageData(0, 0, this.width, this.height);
+                        for (let i = 0; i < imageData.data.length; i++) {
+                            imageData.data[i] += shift;
+                        }
+                        context.putImageData(imageData, 0, 0);
+                    }
+                    return originalToDataURL.apply(this, arguments);
+                };
+            """)
+
             # Set page timeout
             self.page.set_default_timeout(self.timeout)
             
@@ -2164,10 +2356,21 @@ class DynamicScraper:
             raise # Re-raise exception to be handled by Siphon
 
     def stop(self):
+        if self.page:
+            try:
+                self.page.close()
+            except Exception:
+                pass
         if self.browser:
-            self.browser.close()
+            try:
+                self.browser.close()
+            except Exception:
+                pass
         if self.playwright:
-            self.playwright.stop()
+            try:
+                self.playwright.stop()
+            except Exception:
+                pass
         self.browser = None
         self.playwright = None
         self.page = None
@@ -2189,23 +2392,96 @@ class DynamicScraper:
             return False
 
     def extract_links(self, base_url):
-        if not self.page: return set()
-        
+        """
+        Enhanced link extraction from dynamically-rendered pages.
+        Extracts from multiple sources including data attributes, iframes, and JavaScript.
+        """
+        if not self.page:
+            return set()
+
         try:
-            # Using page.eval_on_selector_all is efficient for grabbing hrefs
-            hrefs = self.page.eval_on_selector_all("a[href]", "elements => elements.map(el => el.href)")
-            
-            # Resolve all URLs and add to a set for uniqueness
             links = set()
-            for href in hrefs:
+
+            def add_link(url_str):
+                """Helper to validate and add a link"""
+                if not url_str or not isinstance(url_str, str):
+                    return
+                url_str = url_str.strip()
+                if not url_str or url_str.startswith(('#', 'javascript:', 'mailto:', 'tel:', 'data:')):
+                    return
                 try:
-                    absolute_url = urllib.parse.urljoin(base_url, href.strip())
+                    absolute_url = urllib.parse.urljoin(base_url, url_str)
                     absolute_url = urllib.parse.urldefrag(absolute_url)[0]
-                    if absolute_url.startswith(('http', 'https')):
+                    if absolute_url.startswith(('http://', 'https://')):
                         links.add(absolute_url)
                 except Exception:
-                    continue # Ignore malformed hrefs
+                    pass
+
+            # 1. Standard <a href> links
+            hrefs = self.page.eval_on_selector_all("a[href]", "elements => elements.map(el => el.href)")
+            for href in hrefs:
+                add_link(href)
+
+            # 2. data-href, data-url, data-link attributes
+            for attr in ['data-href', 'data-url', 'data-link', 'data-target', 'data-src']:
+                data_links = self.page.eval_on_selector_all(
+                    f"[{attr}]",
+                    f"elements => elements.map(el => el.getAttribute('{attr}'))"
+                )
+                for link in data_links:
+                    add_link(link)
+
+            # 3. <link> tags (canonical, alternate, etc.)
+            link_tags = self.page.eval_on_selector_all("link[href]", "elements => elements.map(el => el.href)")
+            for link in link_tags:
+                add_link(link)
+
+            # 4. <iframe> src
+            iframes = self.page.eval_on_selector_all("iframe[src]", "elements => elements.map(el => el.src)")
+            for iframe_src in iframes:
+                add_link(iframe_src)
+
+            # 5. <img> src and srcset
+            img_srcs = self.page.eval_on_selector_all("img[src]", "elements => elements.map(el => el.src)")
+            for img_src in img_srcs:
+                add_link(img_src)
+
+            img_srcsets = self.page.eval_on_selector_all("img[srcset]", "elements => elements.map(el => el.srcset)")
+            for srcset in img_srcsets:
+                # Parse srcset format: "url1 1x, url2 2x"
+                items = srcset.split(',')
+                for item in items:
+                    url_part = item.strip().split()[0] if item.strip() else None
+                    if url_part:
+                        add_link(url_part)
+
+            # 6. <script> src
+            scripts = self.page.eval_on_selector_all("script[src]", "elements => elements.map(el => el.src)")
+            for script_src in scripts:
+                add_link(script_src)
+
+            # 7. <video>/<audio> sources
+            media_srcs = self.page.eval_on_selector_all(
+                "video[src], audio[src], video source[src], audio source[src]",
+                "elements => elements.map(el => el.src)"
+            )
+            for media_src in media_srcs:
+                add_link(media_src)
+
+            # 8. Extract from onclick handlers (JavaScript location changes)
+            onclick_elements = self.page.eval_on_selector_all(
+                "[onclick]",
+                """elements => elements.map(el => el.getAttribute('onclick'))"""
+            )
+            onclick_pattern = re.compile(r"(?:location\.href|window\.location|document\.location)\s*=\s*['\"]([^'\"]+)['\"]")
+            for onclick in onclick_elements:
+                if onclick:
+                    matches = onclick_pattern.findall(onclick)
+                    for match in matches:
+                        add_link(match)
+
             return links
+
         except Exception as e:
             logging.error(f"Failed to extract links dynamically from {base_url}: {e}")
             return set()
@@ -2849,6 +3125,10 @@ class Siphon:
 
         self.rate_limiter = RateLimiter(initial_delay=self.delay if self.delay > 0 else 0.25)
         self.cache = {}
+
+        # Track last URL for realistic Referer headers
+        self.last_url = None
+        self.last_url_lock = threading.Lock()
 
         # Threading attributes
         self.max_threads = max_threads
@@ -3496,10 +3776,13 @@ class Siphon:
                     except Exception as e_proxy:
                         logging.warning(f"Failed to get proxy for {url}: {e_proxy}")
 
-                # Set headers including user agent
-                headers = {
-                    'User-Agent': self.user_agent
-                }
+                # Set realistic headers including user agent
+                headers = generate_realistic_headers(
+                    self.user_agent,
+                    referer=getattr(self, 'last_url', None),  # Use last URL as referer
+                    url=url
+                )
+                # Override with any custom headers provided by user
                 if self.headers:
                     headers.update(self.headers)
                 # Event: fetch_start
@@ -3525,6 +3808,11 @@ class Siphon:
                     except Exception:
                         pass
                 self._emit(event='fetch_ok', url=url, status='ok', retries=attempt, proxy_id=str(proxy_to_use) if proxy_to_use else None, elapsed_ms=elapsed_ms)
+
+                # Track last URL for Referer header
+                with self.last_url_lock:
+                    self.last_url = url
+
                 return text
                 
             except requests.exceptions.HTTPError as e_http:
@@ -3623,25 +3911,178 @@ class Siphon:
             logging.error(f"Error parsing HTML: {str(e)}")
             return None
 
+    def is_dynamic_page_needed(self, html_content, url):
+        """
+        Detect if a page requires dynamic (JavaScript) rendering.
+        Returns True if the page likely needs Playwright/dynamic scraping.
+        """
+        if not html_content:
+            return False
+
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+
+            # Indicator 1: Check for SPA frameworks
+            scripts = soup.find_all('script', src=True)
+            spa_indicators = [
+                'react', 'vue', 'angular', 'ember', 'backbone',
+                'next.js', 'nuxt', 'gatsby', 'svelte', 'alpine',
+                'htmx', 'stimulus', 'turbo', 'webpack', 'vite'
+            ]
+            for script in scripts:
+                src = script.get('src', '').lower()
+                if any(indicator in src for indicator in spa_indicators):
+                    logging.debug(f"Detected SPA framework in {url}: {src}")
+                    return True
+
+            # Indicator 2: Check for root div patterns (typical of SPAs)
+            root_patterns = ['#app', '#root', '#__next', '#__nuxt', '[data-reactroot]']
+            for pattern in root_patterns:
+                if soup.select(pattern):
+                    logging.debug(f"Detected SPA root element in {url}: {pattern}")
+                    return True
+
+            # Indicator 3: Check if body is mostly empty (content loaded via JS)
+            body = soup.find('body')
+            if body:
+                # Get text content without scripts/styles
+                for tag in body.find_all(['script', 'style', 'noscript']):
+                    tag.decompose()
+                text_content = body.get_text(strip=True)
+                # If body has very little text but lots of scripts, it's likely dynamic
+                if len(text_content) < 200 and len(soup.find_all('script')) > 3:
+                    logging.debug(f"Detected minimal content with heavy JS in {url}")
+                    return True
+
+            # Indicator 4: Check for hydration/dehydration comments (SSR frameworks)
+            html_str = str(html_content)
+            hydration_patterns = [
+                'data-reactid', 'data-react-checksum', 'data-server-rendered',
+                '__NEXT_DATA__', '__NUXT__', 'ng-version', 'v-cloak'
+            ]
+            for pattern in hydration_patterns:
+                if pattern in html_str:
+                    logging.debug(f"Detected SSR/hydration pattern in {url}: {pattern}")
+                    return True
+
+            # Indicator 5: Check for common anti-bot/challenge pages
+            page_text_lower = html_content.lower()
+            challenge_indicators = [
+                'cloudflare', 'please wait', 'checking your browser',
+                'ddos protection', 'enable javascript', 'verify you are human',
+                'captcha', 'recaptcha', 'hcaptcha', 'just a moment'
+            ]
+            for indicator in challenge_indicators:
+                if indicator in page_text_lower:
+                    logging.debug(f"Detected challenge/protection page in {url}: {indicator}")
+                    return True
+
+            # Indicator 6: Meta tags indicating SPA
+            meta_spa = soup.find('meta', attrs={'name': 'generator'})
+            if meta_spa and any(spa in meta_spa.get('content', '').lower() for spa in ['react', 'vue', 'angular', 'next', 'nuxt']):
+                logging.debug(f"Detected SPA meta generator in {url}")
+                return True
+
+            return False
+
+        except Exception as e:
+            logging.debug(f"Error detecting dynamic page for {url}: {e}")
+            return False
+
     def extract_links(self, soup, base_url):
         """
-        Extract and resolve links from a BeautifulSoup soup object.
+        Extract and resolve links from multiple sources in HTML.
+        Now extracts from: <a>, onclick handlers, data-* attributes, <link>, <iframe>,
+        <img> srcset, meta refresh, and more.
         """
         links = set()
         if not soup or not base_url:
             return links
+
+        def add_link(url_str):
+            """Helper to validate and add a link"""
+            if not url_str or not isinstance(url_str, str):
+                return
+            url_str = url_str.strip()
+            if not url_str or url_str.startswith(('#', 'javascript:', 'mailto:', 'tel:', 'data:')):
+                return
+            try:
+                absolute_url = urllib.parse.urljoin(base_url, url_str)
+                absolute_url = urllib.parse.urldefrag(absolute_url)[0]
+                if absolute_url.startswith(('http://', 'https://')):
+                    links.add(absolute_url)
+            except Exception as e:
+                logging.debug(f"Could not process link '{url_str}': {e}")
+
+        # 1. Standard <a href> tags
         for a_tag in soup.find_all('a', href=True):
-            href = a_tag['href']
-            if href: # Ensure href is not None or empty
-                try:
-                    # urljoin handles absolute and relative URLs correctly
-                    absolute_url = urllib.parse.urljoin(base_url, href.strip())
-                    # Remove fragment
-                    absolute_url = urllib.parse.urldefrag(absolute_url)[0]
-                    if absolute_url.startswith(('http://', 'https://')): # Ensure it's a valid web URL
-                        links.add(absolute_url)
-                except Exception as e:
-                    logging.debug(f"Could not process or resolve link '{href}' from base '{base_url}': {e}")
+            add_link(a_tag['href'])
+
+        # 2. onclick handlers with location changes
+        onclick_pattern = re.compile(r"(?:location\.href|window\.location|document\.location)\s*=\s*['\"]([^'\"]+)['\"]")
+        for tag in soup.find_all(onclick=True):
+            matches = onclick_pattern.findall(tag['onclick'])
+            for match in matches:
+                add_link(match)
+
+        # 3. data-href, data-url, data-link attributes (common in SPAs)
+        for attr in ['data-href', 'data-url', 'data-link', 'data-target', 'data-src']:
+            for tag in soup.find_all(attrs={attr: True}):
+                add_link(tag[attr])
+
+        # 4. <link> tags (rel=canonical, alternate, etc.)
+        for link_tag in soup.find_all('link', href=True):
+            add_link(link_tag['href'])
+
+        # 5. <iframe> src
+        for iframe in soup.find_all('iframe', src=True):
+            add_link(iframe['src'])
+
+        # 6. <img> srcset (responsive images)
+        for img in soup.find_all('img', srcset=True):
+            # srcset format: "url1 1x, url2 2x" or "url1 100w, url2 200w"
+            srcset_items = img['srcset'].split(',')
+            for item in srcset_items:
+                url_part = item.strip().split()[0]
+                add_link(url_part)
+
+        # 7. <img> src
+        for img in soup.find_all('img', src=True):
+            add_link(img['src'])
+
+        # 8. <script> src
+        for script in soup.find_all('script', src=True):
+            add_link(script['src'])
+
+        # 9. <video>/<audio> sources
+        for media in soup.find_all(['video', 'audio']):
+            if media.get('src'):
+                add_link(media['src'])
+            for source in media.find_all('source', src=True):
+                add_link(source['src'])
+
+        # 10. Meta refresh redirects
+        for meta in soup.find_all('meta', attrs={'http-equiv': re.compile(r'refresh', re.I)}):
+            content = meta.get('content', '')
+            # Format: "5; url=http://example.com"
+            url_match = re.search(r'url\s*=\s*[\'"]?([^\'" >]+)', content, re.I)
+            if url_match:
+                add_link(url_match.group(1))
+
+        # 11. <base> tag (changes base URL for relative links)
+        base_tag = soup.find('base', href=True)
+        if base_tag:
+            add_link(base_tag['href'])
+
+        # 12. Extract URLs from inline JavaScript (careful - can be noisy)
+        js_url_pattern = re.compile(r'["\']https?://[^"\']+["\']')
+        for script in soup.find_all('script', string=True):
+            script_content = script.string
+            if script_content:
+                for match in js_url_pattern.finditer(script_content):
+                    url_str = match.group(0).strip('"\'')
+                    add_link(url_str)
+
         return links
 
     def extract_main_content(self, soup, url):

@@ -274,15 +274,9 @@ def signal_handler(sig, frame):
     global siphon_instance
     print("\n\nReceived interrupt signal. Shutting down gracefully...")
     shutdown_flag.set()
-    if siphon_instance:
-        try:
-            siphon_instance.close()
-        except:
-            pass
-    print("Shutdown complete.")
-    # Force exit if hanging
-    import os
-    os._exit(0)
+    # Raise KeyboardInterrupt to allow proper cleanup in main()
+    # The finally block will handle calling close()
+    raise KeyboardInterrupt()
 
 # Register the signal handler
 signal.signal(signal.SIGINT, signal_handler)
@@ -2189,17 +2183,20 @@ class WebScraper:
                     logging.info("Cancelling remaining work...")
                     for future in futures:
                         future.cancel()
-                
-                for i, future in enumerate(futures):
-                    try:
-                        thread_data = future.result(timeout=5)
-                        if thread_data:
-                            all_data.extend(thread_data)
-                            logging.info(f"Collected {len(thread_data)} pages from thread {i}")
-                        else:
-                            logging.debug(f"Thread {i} returned no data")
-                    except Exception as e:
-                        logging.error(f"Thread {i} error: {e}")
+                    # Don't wait for results when shutting down
+                    logging.info("Skipping result collection due to shutdown")
+                else:
+                    # Only collect results if not shutting down
+                    for i, future in enumerate(futures):
+                        try:
+                            thread_data = future.result(timeout=5)
+                            if thread_data:
+                                all_data.extend(thread_data)
+                                logging.info(f"Collected {len(thread_data)} pages from thread {i}")
+                            else:
+                                logging.debug(f"Thread {i} returned no data")
+                        except Exception as e:
+                            logging.error(f"Thread {i} error: {e}")
         
         except KeyboardInterrupt:
             logging.info("Crawl interrupted by user")
@@ -3361,13 +3358,26 @@ class Siphon:
         # Start worker threads
         with ThreadPoolExecutor(max_workers=self.max_threads) as executor:
             futures = [executor.submit(self.worker_thread) for _ in range(self.max_threads)]
-            
-            # Wait for all threads to complete
-            for future in as_completed(futures):
-                try:
-                    future.result()
-                except Exception as e:
-                    logging.error(f"Worker thread error: {e}")
+
+            try:
+                # Wait for all threads to complete
+                for future in as_completed(futures):
+                    if shutdown_flag.is_set():
+                        # Cancel remaining futures on shutdown
+                        for f in futures:
+                            f.cancel()
+                        logging.info("Shutdown requested, cancelling remaining work")
+                        break
+                    try:
+                        future.result(timeout=2)
+                    except Exception as e:
+                        logging.error(f"Worker thread error: {e}")
+            except KeyboardInterrupt:
+                logging.info("Crawl interrupted by user")
+                shutdown_flag.set()
+                # Cancel all futures
+                for f in futures:
+                    f.cancel()
     
     def worker_thread(self):
         """Worker thread that processes URLs from the queue."""
